@@ -1,0 +1,20 @@
+# Purely elastic drop impact with a time-switched contact line
+# (relaxation frozen: lambda = 1e30)
+
+MAXlevel = 9
+Ldomain = 4.0
+tmax = 4.0
+
+We = 5.0
+Ohs = 1e-2
+Oha = 1e-4
+De = 1.0          # ignored when purelyElastic = 1
+Ec = 1.0
+Bo = 1.0
+
+purelyElastic = 1   # neo-Hookean / Oldroyd-B with no stress relaxation
+
+thetaInit = 160.0
+thetaE = 60.0
+ttheta = 1.0
+thetaRate = 100.0

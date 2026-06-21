@@ -1,0 +1,23 @@
+# Viscoelastic drop impact with a time-switched contact line
+# (default parameters)
+
+MAXlevel = 9
+Ldomain = 4.0
+tmax = 4.0
+
+# rheology
+We = 5.0          # Weber number
+Ohs = 1e-2        # solvent Ohnesorge number
+Oha = 1e-4        # air Ohnesorge number
+De = 1.0          # Deborah number (relaxation time)
+Ec = 1.0          # elasto-capillary number (polymer modulus)
+Bo = 1.0          # Bond number (gravity)
+
+# polymer regime: 0 = viscoelastic (finite De), 1 = purely elastic
+purelyElastic = 0
+
+# contact-line switching (degrees / time)
+thetaInit = 160.0   # initial non-wetting angle
+thetaE = 60.0       # final wetting (equilibrium) angle
+ttheta = 1.0        # time at which the angle starts to switch
+thetaRate = 100.0   # ramp rate of the switch
