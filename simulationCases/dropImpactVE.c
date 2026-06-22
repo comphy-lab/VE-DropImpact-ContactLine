@@ -168,7 +168,9 @@ int main(int argc, char const *argv[]) {
 
   f.sigma = 1.0/We;
   f.height = h;
-  G.x = -Bo/(2.*We); // gravity points toward the substrate
+  // Advective scaling (impact speed = 1, sigma = 1/We): the dimensionless
+  // body-force acceleration is Bo/We, directed toward the substrate (-x).
+  G.x = -Bo/We;
 
   run();
 }
@@ -197,6 +199,11 @@ The angle is held at `thetaInit` until `ttheta`, then ramped linearly at
 `thetaRate` deg/time down to the wetting value `thetaE`. Because the
 `h.t[left]` boundary closure re-reads `theta0` every step, mutating it
 here live-updates the imposed contact angle.
+
+With the advective scaling used here the simulation time `t` equals the
+experimental `t_i U0/R0`, so the Sen et al. pinning protocol (ramp
+160 deg -> 60 deg over one impact-time unit, completing at t_i U0/R0 = 9)
+is reproduced exactly by `ttheta = 8`, `thetaRate = 100`.
 */
 event contactAngle (i++) {
   theta0 = (t > ttheta)

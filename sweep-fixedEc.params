@@ -1,0 +1,30 @@
+# Parameter sweep: the We-De regime map at FIXED Ohs and FIXED Ec.
+#
+# Here the elasto-capillary number Ec = G*R0/gamma is held constant while
+# We and De are swept. The polymer Ohnesorge number Oh_p = Ec*De then
+# varies with De (equivalently the solvent fraction beta drifts), which
+# isolates the role of the relaxation time at a fixed elastic modulus.
+#
+#     Ec = Ec (constant)                 (De = 0  ->  Newtonian, Ec = 0)
+
+MODE = fixedEc
+
+# sweep axes (Cartesian product; We is the outer loop)
+SWEEP_WE = 15 20 30 40 50 60
+SWEEP_DE = 0.0 0.03 0.075 0.158 0.326 0.43
+
+# fixed rheology
+Ohs = 0.003        # solvent (water) Ohnesorge number
+Ec = 0.1           # elasto-capillary number (fixed)
+
+# fixed numerics / forcing
+MAXlevel = 10
+Ldomain = 8.0
+tmax = 20.0
+Bo = 1.0
+
+# contact-line switching (paper protocol: ramp 160 -> 60 over t in [8,9])
+thetaInit = 160.0
+thetaE = 60.0
+ttheta = 8.0
+thetaRate = 100.0

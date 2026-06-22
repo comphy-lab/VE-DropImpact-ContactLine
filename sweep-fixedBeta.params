@@ -1,0 +1,33 @@
+# Parameter sweep: the We-De regime map at FIXED Ohs and FIXED beta.
+#
+# beta = eta_s/eta is the solvent fraction. For Oldroyd-B the polymer
+# Ohnesorge number obeys Oh_p = Ec*De = Ohs*(1-beta)/beta, so holding
+# (Ohs, beta) fixed fixes the total Ohnesorge number Oh = Ohs/beta and
+# the elasto-capillary number is DERIVED per case:
+#
+#     Ec = Ohs*(1-beta)/(beta*De)        (De = 0  ->  Newtonian, Ec = 0)
+#
+# This reproduces the experimental regime map (Sen et al.) at a fixed
+# polymer concentration while sweeping We and De.
+
+MODE = fixedBeta
+
+# sweep axes (Cartesian product; We is the outer loop)
+SWEEP_WE = 15 20 30 40 50 60
+SWEEP_DE = 0.0 0.03 0.075 0.158 0.326 0.43
+
+# fixed rheology
+Ohs = 0.003        # solvent (water) Ohnesorge number
+beta = 0.1         # solvent fraction  ->  Oh_total = Ohs/beta = 0.03
+
+# fixed numerics / forcing
+MAXlevel = 10      # paper used ~13 (dz_min ~ 1e-3); 10 is tractable
+Ldomain = 8.0
+tmax = 20.0
+Bo = 1.0
+
+# contact-line switching (paper protocol: ramp 160 -> 60 over t in [8,9])
+thetaInit = 160.0
+thetaE = 60.0
+ttheta = 8.0
+thetaRate = 100.0

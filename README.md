@@ -21,6 +21,18 @@ Developed at the
 [Computational Multiphase Physics (CoMPhy) Lab](https://comphy-lab.org/),
 Durham University.
 
+## Associated publication
+
+This repository is the simulation code accompanying:
+
+> U. Sen, V. Sanjay, K. Zinelis, O. K. Matar, M. Jalaal, D. Lohse,
+> _Transient dynamics of elastocapillary Worthington jets_.
+
+The contact-line switching protocol, the axisymmetric domain (size
+`8 R0`, axis on the bottom boundary, substrate on the left), the
+Oldroyd-B constitutive model, and the dimensionless groups
+(`We`, `Ohs`, `De`, `Ec`, `Bo`) follow the Methods of that paper.
+
 ## Physics
 
 The polymer stress uses the log-conformation method, kept robust at high
@@ -80,6 +92,40 @@ qcc -O2 -Wall -disable-dimensions -I$PWD/src-local \
 Snapshots are written to `intermediate/`, a restart dump to `restart`, and
 a `i dt t ke theta0` log to `logAxi-scalar.dat`.
 
+## Parameter sweeps (We-De regime map)
+
+`runParameterSweep.sh` reproduces the experimental `We`-`De` regime map by
+sweeping over a grid of Weber and Deborah numbers. Two physically distinct
+sweeps are provided:
+
+- `sweep-fixedBeta.params` -- **fixed `Ohs` and fixed `beta`** (solvent
+  fraction). The total Ohnesorge number `Oh = Ohs/beta` is held constant
+  and the elasto-capillary number is derived per case from the Oldroyd-B
+  relation `Oh_p = Ec*De = Ohs*(1-beta)/beta`, i.e.
+  `Ec = Ohs*(1-beta)/(beta*De)` (fixed polymer concentration, varying De).
+- `sweep-fixedEc.params` -- **fixed `Ohs` and fixed `Ec`**. The elastic
+  modulus is held constant while `We` and `De` vary (so `beta` drifts),
+  isolating the role of the relaxation time.
+
+In both, `De = 0` is the Newtonian baseline (`Ec = 0`). The contact-line
+switch is set to the paper protocol (`thetaInit = 160`, `thetaE = 60`,
+`ttheta = 8`, `thetaRate = 100`).
+
+```
+# preview the generated cases without running
+bash runParameterSweep.sh --config sweep-fixedBeta.params --dry-run
+
+# run the full fixed-beta sweep (compiles once, runs each case in its
+# own simulationCases/dropImpactVE/<CaseNo>/ directory)
+bash runParameterSweep.sh --config sweep-fixedBeta.params
+
+# run a subset (e.g. cases 7-12) -- handy for HPC array jobs
+bash runParameterSweep.sh --config sweep-fixedEc.params --start 7 --end 12
+```
+
+Each case is written to `simulationCases/dropImpactVE/<CaseNo>/case.params`
+and consumed by the same `case-params.h` parser as a single run.
+
 ## Parameters
 
 | Key | Meaning | Default |
@@ -112,9 +158,12 @@ postProcess/ - post-processing utilities
 postProcess/getFacet2D.c - extract interface facets from a snapshot
 postProcess/getData-elastic-scalar2D.c - extract fields (velocity, stress) from a snapshot
 postProcess/VideoAxi.py - assemble axisymmetric videos
-runSimulation.sh - root runner (--case, --input)
+runSimulation.sh - root runner for a single case (--case, --input)
+runParameterSweep.sh - root runner for We-De sweeps (--config, --start, --end, --dry-run)
 default-VE.params - default viscoelastic parameters
 default-elastic.params - default purely elastic parameters
+sweep-fixedBeta.params - We-De sweep at fixed Ohs and fixed beta (Ec derived)
+sweep-fixedEc.params - We-De sweep at fixed Ohs and fixed Ec
 AGENTS.md - developer/agent guidelines
 LICENSE - GNU GPLv3
 ```

@@ -18,8 +18,11 @@ CoMPhy elastocapillary Worthington-jet drop-bounce study.
   - `case-params.h`: `key = value` parameter-file parser.
 - `simulationCases/dropImpactVE.c`: the simulation entry point.
 - `postProcess/`: facet/field extraction and axisymmetric video tools.
-- `runSimulation.sh`: root runner (`--case`, `--input`).
+- `runSimulation.sh`: root runner for a single case (`--case`, `--input`).
+- `runParameterSweep.sh`: root runner for We-De sweeps (`--config`,
+  `--start`, `--end`, `--dry-run`).
 - `default-VE.params`, `default-elastic.params`: default parameter files.
+- `sweep-fixedBeta.params`, `sweep-fixedEc.params`: sweep configs.
 - `basilisk/`: optional local Basilisk checkout (untracked).
 
 ## Contact-line model
@@ -51,6 +54,18 @@ tension `sigma = 1/We`, gravity `G.x = -Bo/(2 We)`.
 - Run with params: `bash runSimulation.sh --input default-elastic.params`
 - The runner compiles against `src-local/` and executes in a per-case
   subdirectory; snapshots go to `intermediate/`, restart to `restart`.
+- Preview a sweep: `bash runParameterSweep.sh --config sweep-fixedBeta.params --dry-run`
+- Run a sweep: `bash runParameterSweep.sh --config sweep-fixedEc.params`
+  (compiles once; each case runs in `simulationCases/dropImpactVE/<CaseNo>/`).
+
+## Parameter sweeps
+`runParameterSweep.sh` forms the Cartesian product of `SWEEP_WE` x
+`SWEEP_DE` (We outer), assigns a deterministic `CaseNo`, validates the
+`--start`/`--end` range against the total, and writes one `case.params`
+per case. It does not duplicate the parameter parser: the generated
+`case.params` is read by the same `src-local/case-params.h` as a single
+run. `MODE = fixedBeta` derives `Ec = Ohs*(1-beta)/(beta*De)`;
+`MODE = fixedEc` holds `Ec` constant; `De = 0` is the Newtonian baseline.
 
 ## Code Style
 - 2-space indentation, no tabs; lines <= 80 chars.
