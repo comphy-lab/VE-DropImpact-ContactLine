@@ -26,7 +26,10 @@ Durham University.
 This repository is the simulation code accompanying:
 
 > U. Sen, V. Sanjay, K. Zinelis, O. K. Matar, M. Jalaal, D. Lohse,
-> _Transient dynamics of elastocapillary Worthington jets_.
+> _Transient dynamics of elastocapillary Worthington jets_
+> (in preparation, 2026).
+
+A DOI / preprint link will be added here upon publication.
 
 The contact-line switching protocol, the axisymmetric domain (size
 `8 R0`, axis on the bottom boundary, substrate on the left), the
