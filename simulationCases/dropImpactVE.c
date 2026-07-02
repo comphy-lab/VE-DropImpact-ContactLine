@@ -115,12 +115,12 @@ int purelyElastic = 0;
 double We = 5.0, Ohs = 1e-2, Oha = 1e-4, De = 1.0, Ec = 1.0, Bo = 1.0;
 double tmax = 4.0, Ldomain = 4.0;
 double thetaInit = 160.0, thetaE = 60.0, ttheta = 1.0, thetaRate = 100.0;
+double DTmax = 1e-5, KEmax = 1e2, KEmin = 1e-8;
 
 char nameOut[80], dumpFile[80];
+int stoppedByGuard = 0;
 
 int main(int argc, char const *argv[]) {
-
-  dtmax = 1e-5;
 
   if (argc > 2) {
     fprintf(ferr, "Usage: %s [params_file]\n", argv[0]);
@@ -142,7 +142,10 @@ int main(int argc, char const *argv[]) {
       {"thetaInit", &thetaInit, PARAM_KIND_DOUBLE, 0, 0},
       {"thetaE", &thetaE, PARAM_KIND_DOUBLE, 0, 0},
       {"ttheta", &ttheta, PARAM_KIND_DOUBLE, 0, 0},
-      {"thetaRate", &thetaRate, PARAM_KIND_DOUBLE, 0, 0}
+      {"thetaRate", &thetaRate, PARAM_KIND_DOUBLE, 0, 0},
+      {"DTmax", &DTmax, PARAM_KIND_DOUBLE, 0, 0},
+      {"KEmax", &KEmax, PARAM_KIND_DOUBLE, 0, 0},
+      {"KEmin", &KEmin, PARAM_KIND_DOUBLE, 0, 0}
     };
     if (!parseCaseParams(argv[1], params,
                          sizeof(params)/sizeof(params[0])))
@@ -151,6 +154,8 @@ int main(int argc, char const *argv[]) {
 
   L0 = Ldomain;
   X0 = 0.; Y0 = 0.;
+  DT = DTmax;
+  dtmax = DTmax;
   init_grid (1 << 6);
 
   char comm[80];
@@ -238,11 +243,19 @@ event writingFiles (t = 0; t += tsnap; t <= tmax) {
 }
 
 event end (t = end) {
-  if (pid() == 0)
+  if (pid() == 0) {
+    if (!stoppedByGuard) {
+      FILE * sfp = fopen ("simulation.status", "w");
+      if (sfp) {
+        fprintf (sfp, "completed t=%g i=%d theta0=%g\n", t, i, theta0);
+        fclose (sfp);
+      }
+    }
     fprintf(ferr,
             "Level %d, We %2.1e, Ohs %2.1e, Oha %2.1e, "
             "De %2.1e, Ec %2.1e, Bo %2.1e, elastic %d\n",
             MAXlevel, We, Ohs, Oha, De, Ec, Bo, purelyElastic);
+  }
 }
 
 /**
@@ -276,9 +289,16 @@ event logWriting (i++) {
 
   assert(ke > -1e-10);
 
-  if (i > 1e1 && pid() == 0 && (ke > 1e2 || ke < 1e-8)) {
+  if (i > 1e1 && pid() == 0 && (ke > KEmax || ke < KEmin)) {
+    stoppedByGuard = 1;
     fprintf(ferr, "Kinetic energy %s. Stopping.\n",
-            ke > 1e2 ? "blew up" : "vanished");
+            ke > KEmax ? "blew up" : "vanished");
+    FILE * sfp = fopen ("simulation.status", "w");
+    if (sfp) {
+      fprintf (sfp, "guard_stop reason=%s t=%g i=%d ke=%g theta0=%g DTmax=%g KEmax=%g KEmin=%g\n",
+               ke > KEmax ? "ke_high" : "ke_low", t, i, ke, theta0, DTmax, KEmax, KEmin);
+      fclose (sfp);
+    }
     dump (file = dumpFile);
     return 1;
   }

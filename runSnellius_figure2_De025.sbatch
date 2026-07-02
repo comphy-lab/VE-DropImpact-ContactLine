@@ -23,6 +23,7 @@
 # Optional overrides:
 #   sbatch --export=ALL,OMP_THREADS=24,MAXLEVEL=11 runSnellius_figure2_De025.sbatch
 #   sbatch --ntasks=16 --cpus-per-task=1 --export=ALL,RUN_MODE=mpi runSnellius_figure2_De025.sbatch
+#   sbatch --array=1-1 --export=ALL,DTMAX=2e-5,OUT_SUBDIR=figure2-De025-DT2e-5 runSnellius_figure2_De025.sbatch
 #   DRY_RUN=1 bash runSnellius_figure2_De025.sbatch
 #
 # MPI note:
@@ -46,6 +47,9 @@ OHA="${OHA:-2.9e-05}"
 MAXLEVEL="${MAXLEVEL:-10}"
 LDOMAIN="${LDOMAIN:-8.0}"
 TMAX="${TMAX:-20.0}"
+DTMAX="${DTMAX:-1e-5}"
+KEMAX="${KEMAX:-1e2}"
+KEMIN="${KEMIN:-1e-8}"
 BO="${BO:-1.0}"
 THETA_INIT="${THETA_INIT:-160.0}"
 THETA_E="${THETA_E:-60.0}"
@@ -98,9 +102,10 @@ if [[ "$run_mode" == "serial" ]]; then
   omp_threads=1
 fi
 case_label=$(printf 'c%04d-We%02d-De025' "$case_no" "$we")
-case_dir="${PROJECT_DIR}/simulationCases/figure2-De025/${case_label}"
+out_subdir="${OUT_SUBDIR:-figure2-De025}"
+case_dir="${PROJECT_DIR}/simulationCases/${out_subdir}/${case_label}"
 param_file="${case_dir}/case.params"
-build_dir="${PROJECT_DIR}/.snellius-build/figure2-De025"
+build_dir="${PROJECT_DIR}/.snellius-build/${out_subdir}"
 binary="${build_dir}/dropImpactVE_${run_mode}"
 log_dir="${PROJECT_DIR}/.snellius-logs"
 
@@ -118,9 +123,12 @@ Ec:        ${ec}
 lambda:    ${lambda}
 MAXlevel:    ${MAXLEVEL}
 tmax:        ${TMAX}
+DTmax:       ${DTMAX}
+KEmax:       ${KEMAX}
 run_mode:    ${run_mode}
 ntasks:      ${ntasks}
 omp_threads: ${omp_threads}
+out_subdir:  ${out_subdir}
 case_dir:    ${case_dir}
 CASEINFO
 }
@@ -195,6 +203,9 @@ cat > "$param_file" <<PARAMS
 MAXlevel = ${MAXLEVEL}
 Ldomain = ${LDOMAIN}
 tmax = ${TMAX}
+DTmax = ${DTMAX}
+KEmax = ${KEMAX}
+KEmin = ${KEMIN}
 We = ${we}
 Ohs = ${OHS}
 Oha = ${OHA}
@@ -257,5 +268,16 @@ echo "============================================="
 echo "Finished: $(date) rc=${rc}"
 echo "Case dir: ${case_dir}"
 echo "Log:      ${case_dir}/logAxi-scalar.dat"
+if [[ -f "${case_dir}/simulation.status" ]]; then
+  echo "Status:   $(cat "${case_dir}/simulation.status")"
+  if grep -q '^guard_stop ' "${case_dir}/simulation.status"; then
+    rc=20
+  fi
+else
+  echo "Status:   missing simulation.status"
+  if [[ "$rc" -eq 0 ]]; then
+    rc=21
+  fi
+fi
 echo "============================================="
 exit "$rc"
