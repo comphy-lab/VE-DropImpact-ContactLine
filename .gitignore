@@ -4,6 +4,8 @@ basilisk/
 **/.docker_mode
 **/.venv
 **/.project_config
+.snellius-logs/
+.snellius-build/
 
 # Local agent pointer
 CLAUDE.md
@@ -16,6 +18,7 @@ logAxi-scalar.dat
 
 # Per-case run directories created by runSimulation.sh
 simulationCases/dropImpactVE/
+simulationCases/figure2-De025/
 simulationCases/*/intermediate/
 
 # Compiled binaries / object files
