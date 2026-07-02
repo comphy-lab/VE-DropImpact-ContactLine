@@ -44,7 +44,7 @@ THETA_INIT="${THETA_INIT:-160.0}"
 THETA_E="${THETA_E:-60.0}"
 TTHETA="${TTHETA:-8.0}"
 THETA_RATE="${THETA_RATE:-100.0}"
-BASILISK_REF="${BASILISK_REF:-v2026-05-21}"
+BASILISK_REF="${BASILISK_REF:-v2026-01-13}"
 BASILISK_INSTALL_URL="https://raw.githubusercontent.com/comphy-lab/basilisk-C/main/reset_install_basilisk-ref-locked.sh"
 
 derive_ec() {
@@ -128,11 +128,19 @@ export MPI_LAUNCHER=srun
 export MPI_LAUNCHER_NFLAG=-n
 export OMP_NUM_THREADS=1
 
-if [[ ! -f "${PROJECT_DIR}/.project_config" ]]; then
-  echo "No .project_config found; installing ref-locked Basilisk (${BASILISK_REF})..."
+lock_ref=""
+if [[ -f "${PROJECT_DIR}/basilisk/.comphy-lock" ]]; then
+  lock_ref=$(awk -F= '$1 == "ref" {print $2; exit}' "${PROJECT_DIR}/basilisk/.comphy-lock" 2>/dev/null || true)
+fi
+if [[ ! -f "${PROJECT_DIR}/.project_config" || "$lock_ref" != "$BASILISK_REF" ]]; then
+  echo "Installing ref-locked Basilisk (${BASILISK_REF}); current ref='${lock_ref:-none}'..."
   exec 9>"${PROJECT_DIR}/.basilisk-install.lock"
   flock 9
-  if [[ ! -f "${PROJECT_DIR}/.project_config" ]]; then
+  lock_ref=""
+  if [[ -f "${PROJECT_DIR}/basilisk/.comphy-lock" ]]; then
+    lock_ref=$(awk -F= '$1 == "ref" {print $2; exit}' "${PROJECT_DIR}/basilisk/.comphy-lock" 2>/dev/null || true)
+  fi
+  if [[ ! -f "${PROJECT_DIR}/.project_config" || "$lock_ref" != "$BASILISK_REF" ]]; then
     export TMPDIR="${PROJECT_DIR}/.installtmp"
     mkdir -p "$TMPDIR"
     curl -fsSL "$BASILISK_INSTALL_URL" | bash -s -- --ref="$BASILISK_REF" --hard
