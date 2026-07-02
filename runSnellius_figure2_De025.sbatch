@@ -184,9 +184,9 @@ exec 8>"${build_dir}/.compile.lock"
 flock 8
 if [[ ! -x "$binary" || "${PROJECT_DIR}/simulationCases/dropImpactVE.c" -nt "$binary" || "${PROJECT_DIR}/src-local/two-phaseVE.h" -nt "$binary" || "${PROJECT_DIR}/src-local/log-conform-viscoelastic-scalar-2D.h" -nt "$binary" ]]; then
   echo "Compiling MPI binary..."
+  cp "${PROJECT_DIR}/simulationCases/dropImpactVE.c" "${build_dir}/dropImpactVE.c"
   ( cd "$build_dir" && qcc -D_MPI=1 -I"${PROJECT_DIR}/src-local" -O2 -Wall \
-      -disable-dimensions "${PROJECT_DIR}/simulationCases/dropImpactVE.c" \
-      -o "$binary" -lm )
+      -disable-dimensions dropImpactVE.c -o "$binary" -lm )
 else
   echo "Using existing binary: ${binary}"
 fi

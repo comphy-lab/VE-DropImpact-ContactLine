@@ -6,6 +6,7 @@ basilisk/
 **/.project_config
 .snellius-logs/
 .snellius-build/
+.basilisk-install.lock
 
 # Local agent pointer
 CLAUDE.md
