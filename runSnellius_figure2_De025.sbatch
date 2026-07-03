@@ -161,9 +161,24 @@ if [[ -n "$BASILISK_SRC_OVERRIDE" ]]; then
     echo "ERROR: BASILISK_SRC_OVERRIDE does not exist: ${BASILISK_SRC_OVERRIDE}" >&2
     exit 1
   fi
-  if [[ ! -x "${BASILISK_SRC_OVERRIDE}/qcc" ]] || ! "${BASILISK_SRC_OVERRIDE}/qcc" -help >/dev/null 2>&1; then
-    echo "Building override Basilisk qcc in ${BASILISK_SRC_OVERRIDE}..."
-    ( cd "$BASILISK_SRC_OVERRIDE" && rm -f qcc config && ln -s config.gcc config && { make -k >/dev/null 2>&1 || true; } && make )
+
+  override_qcc_needs_rebuild() {
+    [[ ! -x "${BASILISK_SRC_OVERRIDE}/qcc" ]] && return 0
+    if command -v file >/dev/null 2>&1 &&
+        file "${BASILISK_SRC_OVERRIDE}/qcc" | grep -q 'Mach-O'; then
+      return 0
+    fi
+    return 1
+  }
+
+  if override_qcc_needs_rebuild; then
+    exec 9>"${BASILISK_SRC_OVERRIDE}/.qcc-build.lock"
+    flock 9
+    if override_qcc_needs_rebuild; then
+      echo "Building override Basilisk qcc in ${BASILISK_SRC_OVERRIDE}..."
+      ( cd "$BASILISK_SRC_OVERRIDE" && rm -f qcc && ln -sfn config.gcc config && { make -k >/dev/null 2>&1 || true; } && make )
+    fi
+    flock -u 9
   fi
   export BASILISK="$BASILISK_SRC_OVERRIDE"
   _PATH=":$PATH:"
