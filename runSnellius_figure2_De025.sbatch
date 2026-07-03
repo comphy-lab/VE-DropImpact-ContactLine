@@ -24,6 +24,7 @@
 #   sbatch --export=ALL,OMP_THREADS=24,MAXLEVEL=11 runSnellius_figure2_De025.sbatch
 #   sbatch --ntasks=16 --cpus-per-task=1 --export=ALL,RUN_MODE=mpi runSnellius_figure2_De025.sbatch
 #   sbatch --array=1-1 --export=ALL,DTMAX=2e-5,OUT_SUBDIR=figure2-De025-DT2e-5 runSnellius_figure2_De025.sbatch
+#   sbatch --export=ALL,BASILISK_SRC_OVERRIDE=/path/to/basilisk/src,RUN_MODE=serial runSnellius_figure2_De025.sbatch
 #   DRY_RUN=1 bash runSnellius_figure2_De025.sbatch
 #
 # MPI note:
@@ -56,6 +57,7 @@ THETA_E="${THETA_E:-60.0}"
 TTHETA="${TTHETA:-8.0}"
 THETA_RATE="${THETA_RATE:-100.0}"
 BASILISK_REF="${BASILISK_REF:-v2026-01-13}"
+BASILISK_SRC_OVERRIDE="${BASILISK_SRC_OVERRIDE:-}"
 BASILISK_INSTALL_URL="https://raw.githubusercontent.com/comphy-lab/basilisk-C/main/reset_install_basilisk-ref-locked.sh"
 
 derive_ec() {
@@ -154,41 +156,62 @@ export MPI_LAUNCHER=srun
 export MPI_LAUNCHER_NFLAG=-n
 export OMP_NUM_THREADS="$omp_threads"
 
-lock_ref=""
-if [[ -f "${PROJECT_DIR}/basilisk/.comphy-lock" ]]; then
-  lock_ref=$(awk -F= '$1 == "ref" {print $2; exit}' "${PROJECT_DIR}/basilisk/.comphy-lock" 2>/dev/null || true)
-fi
-if [[ ! -f "${PROJECT_DIR}/.project_config" || "$lock_ref" != "$BASILISK_REF" ]]; then
-  echo "Installing ref-locked Basilisk (${BASILISK_REF}); current ref='${lock_ref:-none}'..."
-  exec 9>"${PROJECT_DIR}/.basilisk-install.lock"
-  flock 9
+if [[ -n "$BASILISK_SRC_OVERRIDE" ]]; then
+  if [[ ! -d "$BASILISK_SRC_OVERRIDE" ]]; then
+    echo "ERROR: BASILISK_SRC_OVERRIDE does not exist: ${BASILISK_SRC_OVERRIDE}" >&2
+    exit 1
+  fi
+  if [[ ! -x "${BASILISK_SRC_OVERRIDE}/qcc" ]]; then
+    echo "Building override Basilisk qcc in ${BASILISK_SRC_OVERRIDE}..."
+    ( cd "$BASILISK_SRC_OVERRIDE" && rm -f config && ln -s config.gcc config && { make -k >/dev/null 2>&1 || true; } && make )
+  fi
+  export BASILISK="$BASILISK_SRC_OVERRIDE"
+  _PATH=":$PATH:"
+  _PATH="${_PATH//:$BASILISK:/:}"
+  _PATH="${_PATH#:}"
+  _PATH="${_PATH%:}"
+  export PATH="$BASILISK${_PATH:+:$_PATH}"
+  unset _PATH
+  hash -r 2>/dev/null || true
+  echo "Using override Basilisk source: ${BASILISK_SRC_OVERRIDE}"
+else
   lock_ref=""
   if [[ -f "${PROJECT_DIR}/basilisk/.comphy-lock" ]]; then
     lock_ref=$(awk -F= '$1 == "ref" {print $2; exit}' "${PROJECT_DIR}/basilisk/.comphy-lock" 2>/dev/null || true)
   fi
   if [[ ! -f "${PROJECT_DIR}/.project_config" || "$lock_ref" != "$BASILISK_REF" ]]; then
-    export TMPDIR="${PROJECT_DIR}/.installtmp"
-    mkdir -p "$TMPDIR"
-    curl -fsSL "$BASILISK_INSTALL_URL" | bash -s -- --ref="$BASILISK_REF" --hard
-    if [[ ! -x "${PROJECT_DIR}/basilisk/src/qcc" ]]; then
-      ( cd "${PROJECT_DIR}/basilisk/src" && rm -f config && ln -s config.gcc config && { make -k >/dev/null 2>&1 || true; } && make )
+    echo "Installing ref-locked Basilisk (${BASILISK_REF}); current ref='${lock_ref:-none}'..."
+    exec 9>"${PROJECT_DIR}/.basilisk-install.lock"
+    flock 9
+    lock_ref=""
+    if [[ -f "${PROJECT_DIR}/basilisk/.comphy-lock" ]]; then
+      lock_ref=$(awk -F= '$1 == "ref" {print $2; exit}' "${PROJECT_DIR}/basilisk/.comphy-lock" 2>/dev/null || true)
     fi
-    if [[ ! -f "${PROJECT_DIR}/.project_config" ]]; then
-      cat > "${PROJECT_DIR}/.project_config" <<CFG
+    if [[ ! -f "${PROJECT_DIR}/.project_config" || "$lock_ref" != "$BASILISK_REF" ]]; then
+      export TMPDIR="${PROJECT_DIR}/.installtmp"
+      mkdir -p "$TMPDIR"
+      curl -fsSL "$BASILISK_INSTALL_URL" | bash -s -- --ref="$BASILISK_REF" --hard
+      if [[ ! -x "${PROJECT_DIR}/basilisk/src/qcc" ]]; then
+        ( cd "${PROJECT_DIR}/basilisk/src" && rm -f config && ln -s config.gcc config && { make -k >/dev/null 2>&1 || true; } && make )
+      fi
+      if [[ ! -f "${PROJECT_DIR}/.project_config" ]]; then
+        cat > "${PROJECT_DIR}/.project_config" <<CFG
 export BASILISK="${PROJECT_DIR}/basilisk/src"
 if [ ! -d "\$BASILISK" ]; then echo "Error: BASILISK not found" >&2; return 1 2>/dev/null || exit 1; fi
 _PATH=":\$PATH:"; _PATH="\${_PATH//:\$BASILISK:/:}"; _PATH="\${_PATH#:}"; _PATH="\${_PATH%:}"
 export PATH="\$BASILISK\${_PATH:+:\$_PATH}"; unset _PATH
 hash -r 2>/dev/null || true
 CFG
+      fi
+      rm -rf "${PROJECT_DIR}/.installtmp"
     fi
-    rm -rf "${PROJECT_DIR}/.installtmp"
+    flock -u 9
   fi
-  flock -u 9
+
+  # shellcheck disable=SC1091
+  source "${PROJECT_DIR}/.project_config"
 fi
 
-# shellcheck disable=SC1091
-source "${PROJECT_DIR}/.project_config"
 command -v qcc >/dev/null || { echo "ERROR: qcc not found after .project_config" >&2; exit 1; }
 if [[ "$run_mode" == "mpi" ]]; then
   command -v mpicc >/dev/null || { echo "ERROR: mpicc not found after module load" >&2; exit 1; }
