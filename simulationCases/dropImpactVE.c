@@ -157,6 +157,7 @@ int main(int argc, char const *argv[]) {
   DT = DTmax;
   dtmax = DTmax;
   init_grid (1 << 6);
+  disable_fpe (FE_DIVBYZERO);
 
   char comm[80];
   sprintf (comm, "mkdir -p intermediate");
