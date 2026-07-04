@@ -23,6 +23,7 @@
 # Useful overrides:
 #   sbatch --export=ALL,DTMAX=2e-5,PACK_CONCURRENCY=10 runSnellius_figure2_De025_packed.sbatch
 #   sbatch --export=ALL,CASE_INDICES=0,4,7,DTMAX=2e-5 runSnellius_figure2_De025_packed.sbatch
+#   sbatch --export=ALL,BASILISK_SRC_OVERRIDE=/path/to/basilisk/src runSnellius_figure2_De025_packed.sbatch
 
 set -euo pipefail
 
@@ -38,7 +39,7 @@ OUT_SUBDIR="${OUT_SUBDIR:-figure2-De025-prod-packed-dt2e-5-20260704}"
 RUN_MODE="${RUN_MODE:-serial}"
 DTMAX="${DTMAX:-2e-5}"
 TMAX="${TMAX:-20.0}"
-BASILISK_SRC_OVERRIDE="${BASILISK_SRC_OVERRIDE:-${PROJECT_DIR}/basilisk-local-2025-09-02/src}"
+BASILISK_SRC_OVERRIDE="${BASILISK_SRC_OVERRIDE-}"
 
 if [[ "$RUN_MODE" != "serial" ]]; then
   echo "ERROR: packed launcher is intended for RUN_MODE=serial; got '${RUN_MODE}'." >&2
@@ -66,7 +67,11 @@ echo "OUT_SUBDIR:          ${OUT_SUBDIR}"
 echo "RUN_MODE:            ${RUN_MODE}"
 echo "DTMAX:               ${DTMAX}"
 echo "TMAX:                ${TMAX}"
-echo "BASILISK override:   ${BASILISK_SRC_OVERRIDE}"
+if [[ -n "$BASILISK_SRC_OVERRIDE" ]]; then
+  echo "BASILISK override:   ${BASILISK_SRC_OVERRIDE}"
+else
+  echo "BASILISK source:     project .project_config"
+fi
 echo "============================================="
 
 running=0
