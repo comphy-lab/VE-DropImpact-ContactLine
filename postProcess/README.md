@@ -19,10 +19,11 @@ the direction of stretching or distinguish it from shear-induced anisotropy.
 Non-positive values (including equilibrium) and the gas are masked, because
 they are outside the domain of the logarithm rather than small physical values.
 
-The left diagnostic uses `hot_r` with its colourbar on the left, `|u|` uses
-`Blues` with dark blue fixed at the imposed impact speed `U0 = 1`, and
-liquid-only streamlines are overlaid. Use `--no-streamlines` to suppress them
-or `--impact-speed` when a run uses a different velocity scale.
+The trace diagnostic uses perceptually ordered `magma` (dark low stretch to
+bright high stretch); `D2` retains `hot_r`. Both use the colourbar on the left.
+`|u|` uses `Blues` with dark blue fixed at the imposed impact speed `U0 = 1`,
+and liquid-only streamlines are overlaid. Use `--no-streamlines` to suppress
+them or `--impact-speed` when a run uses a different velocity scale.
 The default range for both logarithmic left diagnostics is `[-3, 1]`; only
 explicit `--left-vmin` and `--left-vmax` options override it.
 The VOF interface is a single magenta line, chosen to remain visible on both
