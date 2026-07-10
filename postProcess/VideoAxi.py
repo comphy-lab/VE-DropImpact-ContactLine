@@ -313,7 +313,7 @@ def render_frame(output: Path, snapshot: Path, facet_bin: Path, data_bin: Path,
                                  vmin=limits[0], vmax=limits[1])
     left_image = axis.imshow(left, origin="lower", aspect="equal",
                              extent=(*r_extent, *x_extent),
-                             cmap="magma" if args.left_field == "trA" else "hot_r",
+                             cmap="magma_r" if args.left_field == "trA" else "hot_r",
                              vmin=limits[2], vmax=limits[3], alpha=.82)
     if args.streamlines:
         liquid_only = np.ma.masked_where(liquid < .5, radial_velocity)
@@ -321,7 +321,7 @@ def render_frame(output: Path, snapshot: Path, facet_bin: Path, data_bin: Path,
         stream_r = np.linspace(radii[0], radii[-1], len(radii))
         stream_z = np.linspace(xs[0], xs[-1], len(xs))
         axis.streamplot(stream_r, stream_z, liquid_only, axial_liquid,
-                        density=args.streamline_density, color="white",
+                        density=args.streamline_density, color="#7fff00",
                         linewidth=.55, arrowsize=.55, zorder=4)
     if len(facets):
         segments = facets[..., [1, 0]]
