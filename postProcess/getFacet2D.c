@@ -1,77 +1,37 @@
 /**
-# Facet Extraction (2D)
+# Facet extractor for VE drop-impact snapshots
 
-Restores a Basilisk snapshot and outputs VOF interface facets for
-visualization or post-processing.
-
-## Usage
+Restore one snapshot with the same Basilisk include stack as the solver and
+write the liquid-interface facets to standard output.
 
 ```bash
-./getFacet2D <input_file>
+getFacet2D intermediate/snapshot-0.1000 > facets.dat
 ```
-
-## Dependencies
-
-- `utils.h`
-- `output.h`
-- `fractions.h`
-
-## Author
-
-Vatsal Sanjay (vatsal.sanjay@comphy-lab.org)
-CoMPhy Lab
-Date: 2025-05-13
 */
 
+#include "axi.h"
+#include "navier-stokes/centered.h"
+#include "log-conform-viscoelastic-scalar-2D.h"
+#define FILTERED
+#include "contact-fixed.h"
+#include "two-phaseVE.h"
+#include "navier-stokes/conserving.h"
+#include "tension.h"
+#include "reduced.h"
 #include "utils.h"
 #include "output.h"
-#include "fractions.h"
 
-/**
-## Globals
-
-- `f[]`: Volume fraction field (liquid phase)
-- `filename[80]`: Input snapshot filename
-*/
-scalar f[];
-char filename[80];
-
-/**
-### main()
-
-Restores a snapshot and writes interface facets to `stderr`.
-
-#### Args
-
-- `a`: Number of CLI arguments.
-- `arguments[1]`: Input snapshot filename.
-
-#### Returns
-
-- `0` on success.
-
-#### Notes
-
-- Output uses `output_facets()` and is written to `ferr`.
-*/
-int main(int a, char const *arguments[]) {
-  // Parse command line argument for input filename
-  sprintf(filename, "%s", arguments[1]);
-
-  // Restore simulation state from file
-  restore(file = filename);
-
-  // Set output destination to stderr
-  FILE * fp = ferr;
-
-  // Extract and output facets from volume fraction field
-  output_facets(f, fp);
-
-  // Ensure all output is written
-  fflush(fp);
-
-  // Close file pointer (stderr alias)
-  fclose(fp);
-
+int main (int argc, char * argv[])
+{
+  if (argc != 2) {
+    fprintf (stderr, "Usage: %s <snapshot>\n", argv[0]);
+    return 1;
+  }
+  if (!restore (file = argv[1])) {
+    fprintf (stderr, "Could not restore snapshot: %s\n", argv[1]);
+    return 2;
+  }
+  output_facets (f, stdout);
+  fflush (stdout);
   return 0;
 }

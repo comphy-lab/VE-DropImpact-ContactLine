@@ -28,7 +28,7 @@ Worthington-jet drop-bounce setup.
 #include "navier-stokes/centered.h"
 #include "log-conform-viscoelastic-scalar-2D.h"
 #define FILTERED // smear density / viscosity jumps
-#include "contact.h"
+#include "contact-fixed.h"
 #include "two-phaseVE.h"
 #include "navier-stokes/conserving.h"
 #include "tension.h"
@@ -68,7 +68,7 @@ boundary (axisymmetric convention).
 /**
 ## Height field for the contact line
 
-The interface height field `h` is required by `contact.h` to impose the
+The interface height field `h` is required by `contact-fixed.h` to impose the
 contact angle and to compute curvature near the wall.
 */
 vector h[];
@@ -157,8 +157,6 @@ int main(int argc, char const *argv[]) {
   DT = DTmax;
   dtmax = DTmax;
   init_grid (1 << 6);
-  disable_fpe (FE_DIVBYZERO);
-
   char comm[80];
   sprintf (comm, "mkdir -p intermediate");
   system(comm);
