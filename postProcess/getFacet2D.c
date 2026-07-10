@@ -24,6 +24,7 @@ Date: 2025-05-13
 */
 
 #include "utils.h"
+#include "axi.h"
 #include "output.h"
 #include "fractions.h"
 
@@ -31,10 +32,10 @@ Date: 2025-05-13
 ## Globals
 
 - `f[]`: Volume fraction field (liquid phase)
-- `filename[80]`: Input snapshot filename
+- `filename`: Input snapshot filename
 */
 scalar f[];
-char filename[80];
+const char * filename;
 
 /**
 ### main()
@@ -55,8 +56,13 @@ Restores a snapshot and writes interface facets to `stderr`.
 - Output uses `output_facets()` and is written to `ferr`.
 */
 int main(int a, char const *arguments[]) {
+  if (a != 2) {
+    fprintf (ferr, "Usage: %s <input_file>\n", arguments[0]);
+    return 1;
+  }
+
   // Parse command line argument for input filename
-  sprintf(filename, "%s", arguments[1]);
+  filename = arguments[1];
 
   // Restore simulation state from file
   restore(file = filename);
