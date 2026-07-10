@@ -413,42 +413,42 @@ def main() -> int:
 
     script_dir = Path(__file__).resolve().parent
     with tempfile.TemporaryDirectory(prefix="ve-post-tools-", dir=case_dir) as build:
-      with tempfile.TemporaryDirectory(prefix="ve-post-cache-", dir=case_dir) as cache:
-        try:
-            configure_worker_environment(Path(cache))
-            ensure_plotting()
-            print("Pre-processing: compiling get* helpers...", file=sys.stderr)
-            facet_bin, data_bin = precompile_helpers(script_dir, Path(build))
-            requested = requested_window(args)
-            args.xmin, args.xmax, args.ymin, args.ymax = resolve_window(
-                get_facets(snapshots[0], facet_bin, case_dir), *requested)
-            _, _, fields = get_field_grid(
-                snapshots[0], data_bin, case_dir, args.xmin, 0., args.xmax,
-                max(abs(args.ymin), abs(args.ymax)), args.ny
-            )
-            vel_limits = (0., args.impact_speed)
-            left_limits = default_left_limits(args.left_field, fields[args.left_field])
-            limits = (args.vel_vmin if args.vel_vmin is not None else vel_limits[0],
-                      args.vel_vmax if args.vel_vmax is not None else vel_limits[1],
-                      args.left_vmin if args.left_vmin is not None else left_limits[0],
-                      args.left_vmax if args.left_vmax is not None else left_limits[1])
-            render_snapshots(snapshots, case_dir, frames_dir, facet_bin, data_bin,
-                             args, limits, Path(cache))
-            if args.skip_video:
-                print(f"Frames written to {frames_dir}", file=sys.stderr)
+        with tempfile.TemporaryDirectory(prefix="ve-post-cache-", dir=case_dir) as cache:
+            try:
+                configure_worker_environment(Path(cache))
+                ensure_plotting()
+                print("Pre-processing: compiling get* helpers...", file=sys.stderr)
+                facet_bin, data_bin = precompile_helpers(script_dir, Path(build))
+                requested = requested_window(args)
+                args.xmin, args.xmax, args.ymin, args.ymax = resolve_window(
+                    get_facets(snapshots[0], facet_bin, case_dir), *requested)
+                _, _, fields = get_field_grid(
+                    snapshots[0], data_bin, case_dir, args.xmin, 0., args.xmax,
+                    max(abs(args.ymin), abs(args.ymax)), args.ny
+                )
+                vel_limits = (0., args.impact_speed)
+                left_limits = default_left_limits(args.left_field, fields[args.left_field])
+                limits = (args.vel_vmin if args.vel_vmin is not None else vel_limits[0],
+                          args.vel_vmax if args.vel_vmax is not None else vel_limits[1],
+                          args.left_vmin if args.left_vmin is not None else left_limits[0],
+                          args.left_vmax if args.left_vmax is not None else left_limits[1])
+                render_snapshots(snapshots, case_dir, frames_dir, facet_bin, data_bin,
+                                 args, limits, Path(cache))
+                if args.skip_video:
+                    print(f"Frames written to {frames_dir}", file=sys.stderr)
+                    return 0
+                fps = args.fps if args.fps is not None else len(snapshots)/args.duration
+                output = Path(args.output)
+                output = output if output.is_absolute() else case_dir / output
+                subprocess.run([args.ffmpeg, "-y", "-framerate", f"{fps:.6g}",
+                                "-pattern_type", "glob", "-i", str(frames_dir / "frame_*.png"),
+                                "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-c:v", "libx264",
+                                "-r", f"{fps:.6g}", "-pix_fmt", "yuv420p", str(output)], check=True)
+                print(f"Wrote video: {output}", file=sys.stderr)
                 return 0
-            fps = args.fps if args.fps is not None else len(snapshots)/args.duration
-            output = Path(args.output)
-            output = output if output.is_absolute() else case_dir / output
-            subprocess.run([args.ffmpeg, "-y", "-framerate", f"{fps:.6g}",
-                            "-pattern_type", "glob", "-i", str(frames_dir / "frame_*.png"),
-                            "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-c:v", "libx264",
-                            "-r", f"{fps:.6g}", "-pix_fmt", "yuv420p", str(output)], check=True)
-            print(f"Wrote video: {output}", file=sys.stderr)
-            return 0
-        except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError) as error:
-          print(f"Error: {error}", file=sys.stderr)
-          return 2
+            except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError) as error:
+                print(f"Error: {error}", file=sys.stderr)
+                return 2
 
 
 if __name__ == "__main__":
