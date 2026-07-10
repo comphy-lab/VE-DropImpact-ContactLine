@@ -17,6 +17,8 @@ liquid-only streamlines are overlaid. Use `--no-streamlines` to suppress them
 or `--impact-speed` when a run uses a different velocity scale.
 The default `D2` range is always `[-3, 1]`; only explicit `--left-vmin` and
 `--left-vmax` options override it.
+The VOF interface is a single magenta line, chosen to remain visible on both
+the `hot_r` and `Blues` halves without a contrasting under-stroke.
 
 The default impact window is `r in [-4, 4]`, `z in [0, 4]`. The compact
 colourbars are centred beside the image and limited to 72% of the image-box

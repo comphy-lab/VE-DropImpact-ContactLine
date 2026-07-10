@@ -325,8 +325,9 @@ def render_frame(output: Path, snapshot: Path, facet_bin: Path, data_bin: Path,
         reflected = segments.copy()
         reflected[..., 0] *= -1.
         interface = np.concatenate((reflected, segments))
-        axis.add_collection(LineCollection(interface, colors="white", linewidths=2.3))
-        axis.add_collection(LineCollection(interface, colors="black", linewidths=1.1))
+        axis.add_collection(
+            LineCollection(interface, colors="#ff00ff", linewidths=1.35, zorder=6)
+        )
     axis.axvline(0., color="0.5", linestyle="--", linewidth=.8)
     axis.set(xlim=(args.ymin, args.ymax), ylim=(args.xmin, args.xmax),
              title=rf"$t={snapshot_time(snapshot):.4f}$")
