@@ -24,7 +24,7 @@ np: Any = None
 plt: Any = None
 LineCollection: Any = None
 
-FIELD_INDEX = {"D2": 2, "vel": 3, "trA": 4}
+FIELD_INDEX = {"D2": 2, "vel": 3, "trA": 4, "ux": 5, "uy": 6, "f": 7}
 FIELD_LABEL = {
     "D2": r"$\log_{10}\!\left(\|\mathcal{D}\|^2\right)$",
     "vel": r"$|\mathbf{u}|$",
@@ -64,10 +64,16 @@ def parse_args() -> argparse.Namespace:
                         help="Minimum plotted radius; defaults to facets.")
     parser.add_argument("--ymax", type=float,
                         help="Maximum plotted radius; defaults to facets.")
+    parser.add_argument("--impact-speed", type=float, default=1.,
+                        help="Reference impact speed U0 for |u| scaling (default: 1).")
     parser.add_argument("--vel-vmin", type=float)
     parser.add_argument("--vel-vmax", type=float)
     parser.add_argument("--left-vmin", type=float)
     parser.add_argument("--left-vmax", type=float)
+    parser.add_argument("--no-streamlines", dest="streamlines", action="store_false",
+                        default=True, help="Do not overlay liquid-phase streamlines.")
+    parser.add_argument("--streamline-density", type=float, default=1.15,
+                        help="Matplotlib streamline density (default: 1.15).")
     return parser.parse_args()
 
 
@@ -191,10 +197,10 @@ def get_field_grid(snapshot: Path, data_bin: Path, case_dir: Path, xmin: float,
     rows: list[list[float]] = []
     for line in raw.splitlines():
         values = line.split()
-        if len(values) < 5:
+        if len(values) < 8:
             continue
         try:
-            rows.append([float(value) for value in values[:5]])
+            rows.append([float(value) for value in values[:8]])
         except ValueError:
             continue
     if not rows:
@@ -247,6 +253,14 @@ def mirrored(field: Any, radii: Any) -> tuple[Any, Any]:
     return r, np.ma.concatenate((field[:, ::-1], field), axis=1)
 
 
+def mirrored_velocity(axial: Any, radial: Any, radii: Any) -> tuple[Any, Any, Any]:
+    """Reflect the physical half-plane velocity into plotted ``(r, z)``."""
+    r = np.concatenate((-radii[::-1], radii))
+    axial_full = np.ma.concatenate((axial[:, ::-1], axial), axis=1)
+    radial_full = np.ma.concatenate((-radial[:, ::-1], radial), axis=1)
+    return r, axial_full, radial_full
+
+
 def extent(centres: Any) -> tuple[float, float]:
     delta = float(np.median(np.diff(centres))) if len(centres) > 1 else 1.
     return float(centres[0] - delta/2.), float(centres[-1] + delta/2.)
@@ -263,15 +277,26 @@ def render_frame(output: Path, snapshot: Path, facet_bin: Path, data_bin: Path,
     radii, velocity = mirrored(fields["vel"], ys)
     _, left = mirrored(fields[args.left_field], ys)
     left[:, radii > 0.] = np.ma.masked
+    _, axial_velocity, radial_velocity = mirrored_velocity(fields["ux"], fields["uy"], ys)
+    _, liquid = mirrored(fields["f"], ys)
     x_extent, r_extent = extent(xs), extent(radii)
     figure, axis = plt.subplots(figsize=(7.2, 8.5), dpi=180)
+    figure.subplots_adjust(left=.20, right=.80, bottom=.06, top=.91)
     velocity_image = axis.imshow(velocity, origin="lower", aspect="equal",
-                                 extent=(*r_extent, *x_extent), cmap="viridis",
+                                 extent=(*r_extent, *x_extent), cmap="Blues",
                                  vmin=limits[0], vmax=limits[1])
     left_image = axis.imshow(left, origin="lower", aspect="equal",
                              extent=(*r_extent, *x_extent),
-                             cmap="inferno" if args.left_field == "D2" else "RdBu_r",
+                             cmap="hot_r" if args.left_field == "D2" else "RdBu_r",
                              vmin=limits[2], vmax=limits[3], alpha=.82)
+    if args.streamlines:
+        liquid_only = np.ma.masked_where(liquid < .5, radial_velocity)
+        axial_liquid = np.ma.masked_where(liquid < .5, axial_velocity)
+        stream_r = np.linspace(radii[0], radii[-1], len(radii))
+        stream_z = np.linspace(xs[0], xs[-1], len(xs))
+        axis.streamplot(stream_r, stream_z, liquid_only, axial_liquid,
+                        density=args.streamline_density, color="white",
+                        linewidth=.55, arrowsize=.55, zorder=4)
     if len(facets):
         segments = facets[..., [1, 0]]
         reflected = segments.copy()
@@ -283,10 +308,13 @@ def render_frame(output: Path, snapshot: Path, facet_bin: Path, data_bin: Path,
     axis.set(xlim=(args.ymin, args.ymax), ylim=(args.xmin, args.xmax),
              title=rf"$t={snapshot_time(snapshot):.4f}$")
     axis.set_axis_off()
-    figure.colorbar(velocity_image, ax=axis, fraction=.042, pad=.03,
-                    label=FIELD_LABEL["vel"])
-    figure.colorbar(left_image, ax=axis, fraction=.042, pad=.10,
-                    label=FIELD_LABEL[args.left_field])
+    left_bar = figure.add_axes([.055, .17, .027, .64])
+    left_colorbar = figure.colorbar(left_image, cax=left_bar,
+                                    label=FIELD_LABEL[args.left_field])
+    left_colorbar.ax.yaxis.set_ticks_position("left")
+    left_colorbar.ax.yaxis.set_label_position("left")
+    right_bar = figure.add_axes([.865, .17, .027, .64])
+    figure.colorbar(velocity_image, cax=right_bar, label=FIELD_LABEL["vel"])
     output.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(output, bbox_inches="tight")
     plt.close(figure)
@@ -363,7 +391,7 @@ def main() -> int:
                 snapshots[0], data_bin, case_dir, args.xmin, 0., args.xmax,
                 max(abs(args.ymin), abs(args.ymax)), args.ny
             )
-            vel_limits = finite_limits(fields["vel"])
+            vel_limits = (0., args.impact_speed)
             left_limits = finite_limits(fields[args.left_field])
             limits = (args.vel_vmin if args.vel_vmin is not None else vel_limits[0],
                       args.vel_vmax if args.vel_vmax is not None else vel_limits[1],

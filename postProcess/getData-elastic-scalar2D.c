@@ -1,8 +1,8 @@
 /**
 # Scalar diagnostics for VE drop-impact snapshots
 
-Restore the complete solver state and sample `D2`, velocity magnitude and
-the conformation-trace deviation on a uniform physical half-plane grid.
+Restore the complete solver state and sample `D2`, velocity, conformation,
+and liquid-fraction diagnostics on a uniform physical half-plane grid.
 
 ```bash
 getData-elastic-scalar2D snapshot xmin ymin xmax ymax ny > fields.dat
@@ -23,7 +23,7 @@ getData-elastic-scalar2D snapshot xmin ymin xmax ymax ny > fields.dat
 
 int nx, ny, len;
 double xmin, ymin, xmax, ymax, Deltax, Deltay;
-scalar D2c[], vel[], trA[];
+scalar D2c[], vel[], trA[], ux[], uy[];
 scalar * list = NULL;
 
 int main (int argc, char * argv[])
@@ -52,6 +52,9 @@ int main (int argc, char * argv[])
   list = list_add (list, D2c);
   list = list_add (list, vel);
   list = list_add (list, trA);
+  list = list_add (list, ux);
+  list = list_add (list, uy);
+  list = list_add (list, f);
 
   foreach() {
     double D11 = (u.y[0,1] - u.y[0,-1])/(2.*Delta);
@@ -63,6 +66,8 @@ int main (int argc, char * argv[])
     D2c[] = f[]*D2;
     D2c[] = D2c[] > 0. ? log10(D2c[]) : -10.;
     vel[] = sqrt(sq(u.x[]) + sq(u.y[]));
+    ux[] = u.x[];
+    uy[] = u.y[];
     trA[] = (A11[] + A22[] + AThTh[])/3. - 1.;
     trA[] = trA[] > 0. ? log10(trA[]) : -10.;
   }

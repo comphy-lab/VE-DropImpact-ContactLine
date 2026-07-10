@@ -40,6 +40,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--vel-vmax", type=float)
     parser.add_argument("--left-vmin", type=float)
     parser.add_argument("--left-vmax", type=float)
+    parser.add_argument("--impact-speed", type=float, default=1.)
+    parser.add_argument("--no-streamlines", dest="streamlines", action="store_false",
+                        default=True)
+    parser.add_argument("--streamline-density", type=float, default=1.15)
     return parser.parse_args()
 
 
@@ -75,7 +79,6 @@ def main() -> int:
             snapshot, data_bin, case_dir, xmin, 0., xmax,
             max(abs(ymin), abs(ymax)), args.ny
         )
-        vel_limits = video.finite_limits(fields["vel"])
         left_limits = video.finite_limits(fields[args.left_field])
         output = args.output or case_dir / f"render-one-t{video.snapshot_time(snapshot):.4f}.png"
         output = output if output.is_absolute() else case_dir / output
@@ -83,8 +86,8 @@ def main() -> int:
         render_options.update(xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
         render_args = SimpleNamespace(**render_options)
         video.render_frame(output, snapshot, facet_bin, data_bin, case_dir, render_args,
-                           (args.vel_vmin if args.vel_vmin is not None else vel_limits[0],
-                            args.vel_vmax if args.vel_vmax is not None else vel_limits[1],
+                           (args.vel_vmin if args.vel_vmin is not None else 0.,
+                            args.vel_vmax if args.vel_vmax is not None else args.impact_speed,
                             args.left_vmin if args.left_vmin is not None else left_limits[0],
                             args.left_vmax if args.left_vmax is not None else left_limits[1]))
     print(f"WROTE {output} t={video.snapshot_time(snapshot):.4f} snapshot={snapshot}")

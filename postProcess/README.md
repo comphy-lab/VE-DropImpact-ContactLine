@@ -11,6 +11,10 @@ python3 postProcess/VideoAxi.py \
 
 Use `--skip-video` to retain PNG frames only, and `--left-field trA` to plot
 the conformation trace rather than `D2` on the left half of the cross-section.
+By default, `D2` uses `hot_r` with its colourbar on the left, `|u|` uses
+`Blues` with dark blue fixed at the imposed impact speed `U0 = 1`, and
+liquid-only streamlines are overlaid. Use `--no-streamlines` to suppress them
+or `--impact-speed` when a run uses a different velocity scale.
 
 `render_one.py` is deliberately serial and renders the latest available
 snapshot by default. Select a particular dump with `--snapshot` or the nearest
