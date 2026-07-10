@@ -53,3 +53,22 @@ The fresh four-rank run reached `t = 2.33026` and wrote 24 readable snapshots
 before exiting with status 1, but produced no solver-side diagnostic or stack
 trace. Host NIC hardware-hang messages appeared in the same period; that is a
 correlation to investigate, not an established cause of the solver exit.
+
+## MPI inspection workflow
+
+For the saved four-rank dumps, stage the `snapshot-*` files under an
+`intermediate/` directory and use the same serial post-processing commands.
+The current project configuration restores the checked `t = 0` through `2.3`
+MPI dumps this way, while retaining the reliable process-based parallelism in
+the Python renderer.
+
+```bash
+python3 postProcess/VideoAxi.py \
+  --case-dir ~/Documents/Projects-cowork/share-files/EC-jets/mpi \
+  --frames-dir ~/Documents/Projects-cowork/share-files/EC-jets/mpi/frames \
+  --cpus 4 --output mpi-diagnostics-evolution.mp4
+
+python3 postProcess/render_one.py \
+  --case-dir ~/Documents/Projects-cowork/share-files/EC-jets/mpi \
+  --snapshot intermediate/snapshot-2.3000 -o latest-diagnostics.png
+```
