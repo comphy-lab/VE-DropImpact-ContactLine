@@ -23,10 +23,17 @@ CoMPhy Lab
 Date: 2025-05-13
 */
 
-#include "utils.h"
 #include "axi.h"
+#include "navier-stokes/centered.h"
+#include "log-conform-viscoelastic-scalar-2D.h"
+#define FILTERED
+#include "contact-fixed.h"
+#include "two-phaseVE.h"
+#include "navier-stokes/conserving.h"
+#include "tension.h"
+#include "reduced.h"
+#include "utils.h"
 #include "output.h"
-#include "fractions.h"
 
 /**
 ## Globals
@@ -34,7 +41,6 @@ Date: 2025-05-13
 - `f[]`: Volume fraction field (liquid phase)
 - `filename`: Input snapshot filename
 */
-scalar f[];
 const char * filename;
 
 /**
