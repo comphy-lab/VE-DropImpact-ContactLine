@@ -264,6 +264,13 @@ def finite_limits(field: Any) -> tuple[float | None, float | None]:
     return lo, hi
 
 
+def default_left_limits(field_name: str, field: Any) -> tuple[float | None, float | None]:
+    """Use a fixed, comparable D2 scale; infer limits only for trA."""
+    if field_name == "D2":
+        return -3., 1.
+    return finite_limits(field)
+
+
 def mirrored(field: Any, radii: Any) -> tuple[Any, Any]:
     r = np.concatenate((-radii[::-1], radii))
     return r, np.ma.concatenate((field[:, ::-1], field), axis=1)
@@ -414,7 +421,7 @@ def main() -> int:
                 max(abs(args.ymin), abs(args.ymax)), args.ny
             )
             vel_limits = (0., args.impact_speed)
-            left_limits = finite_limits(fields[args.left_field])
+            left_limits = default_left_limits(args.left_field, fields[args.left_field])
             limits = (args.vel_vmin if args.vel_vmin is not None else vel_limits[0],
                       args.vel_vmax if args.vel_vmax is not None else vel_limits[1],
                       args.left_vmin if args.left_vmin is not None else left_limits[0],

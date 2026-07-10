@@ -83,7 +83,7 @@ def main() -> int:
             snapshot, data_bin, case_dir, xmin, 0., xmax,
             max(abs(ymin), abs(ymax)), args.ny
         )
-        left_limits = video.finite_limits(fields[args.left_field])
+        left_limits = video.default_left_limits(args.left_field, fields[args.left_field])
         output = args.output or case_dir / f"render-one-t{video.snapshot_time(snapshot):.4f}.png"
         output = output if output.is_absolute() else case_dir / output
         render_options = vars(args).copy()
