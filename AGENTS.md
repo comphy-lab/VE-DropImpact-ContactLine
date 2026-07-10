@@ -28,7 +28,8 @@ CoMPhy elastocapillary Worthington-jet drop-bounce study.
 ## Contact-line model
 The substrate is the **left** boundary (axisymmetric convention: bottom is
 the symmetry axis). The contact angle is imposed via height functions
-(`contact.h`, `f.height = h`, `h.t[left] = contact_angle(theta0)`). The
+(`src-local/contact-fixed.h`, `f.height = h`,
+`h.t[left] = contact_angle(theta0)`). The
 angle is held at `thetaInit` until `ttheta`, then ramped at `thetaRate`
 deg/time down to the wetting value `thetaE`. The `h.t[left]` closure
 re-reads the global `theta0` every step, so the `contactAngle` event
@@ -37,9 +38,9 @@ must wet it.
 
 ## Include order (do not reorder)
 `axi.h` -> `navier-stokes/centered.h` -> VE solver header -> `#define
-FILTERED` -> `contact.h` -> `two-phaseVE.h` -> `navier-stokes/conserving.h`
+FILTERED` -> `contact-fixed.h` -> `two-phaseVE.h` -> `navier-stokes/conserving.h`
 -> `tension.h` -> `reduced.h` -> `case-params.h`. The VE header must
-precede `two-phaseVE.h` (which binds `Gp`/`lambda`); `contact.h` must
+precede `two-phaseVE.h` (which binds `Gp`/`lambda`); `contact-fixed.h` must
 precede the two-phase layer.
 
 ## Dimensionless mapping
