@@ -269,7 +269,7 @@ def default_left_limits(field_name: str, field: Any) -> tuple[float | None, floa
     if field_name == "D2":
         return -3., 1.
     if field_name == "trA":
-        return -2., 2.
+        return -1., 1.
     return finite_limits(field)
 
 

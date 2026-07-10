@@ -24,7 +24,7 @@ stretch placed symmetrically about zero; `D2` retains `hot_r`. Both use the
 colourbar on the left. `|u|` uses `Blues` with dark blue fixed at the imposed
 impact speed `U0 = 1`, and lime-green liquid-only streamlines are overlaid.
 Use `--no-streamlines` to suppress them or `--impact-speed` when a run uses a
-different velocity scale. The default range is `[-2, 2]` for the trace and
+different velocity scale. The default range is `[-1, 1]` for the trace and
 `[-3, 1]` for `D2`; explicit `--left-vmin` and `--left-vmax` override it.
 The VOF interface is a single magenta line, chosen to remain visible on both
 the `hot_r` and `Blues` halves without a contrasting under-stroke.
