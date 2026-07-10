@@ -1,8 +1,9 @@
 /**
 # Scalar diagnostics for VE drop-impact snapshots
 
-Restore the complete solver state and sample `D2`, velocity, conformation,
-and liquid-fraction diagnostics on a uniform physical half-plane grid.
+Restore the complete solver state and sample `D2`, velocity, excess
+conformation trace, and liquid-fraction diagnostics on a uniform physical
+half-plane grid.
 
 ```bash
 getData-elastic-scalar2D snapshot xmin ymin xmax ymax ny > fields.dat
@@ -68,8 +69,11 @@ int main (int argc, char * argv[])
     vel[] = sqrt(sq(u.x[]) + sq(u.y[]));
     ux[] = u.x[];
     uy[] = u.y[];
-    trA[] = (A11[] + A22[] + AThTh[])/3. - 1.;
-    trA[] = trA[] > 0. ? log10(trA[]) : -10.;
+    // A = I at polymer equilibrium, so tr(A) - 3 measures total excess
+    // polymer stretch.  Keep a sentinel outside the positive log domain;
+    // the renderer masks it rather than presenting it as a physical value.
+    trA[] = A11[] + A22[] + AThTh[] - 3.;
+    trA[] = trA[] > 1e-12 ? log10(trA[]) : -10.;
   }
 
   Deltay = (ymax - ymin)/ny;

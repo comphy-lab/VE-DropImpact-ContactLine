@@ -9,14 +9,22 @@ python3 postProcess/VideoAxi.py \
   --case-dir simulationCases/dropImpactVE/<case> --cpus 4
 ```
 
-Use `--skip-video` to retain PNG frames only, and `--left-field trA` to plot
-the conformation trace rather than `D2` on the left half of the cross-section.
-By default, `D2` uses `hot_r` with its colourbar on the left, `|u|` uses
+Use `--skip-video` to retain PNG frames only. By default the left half shows
+`log10(tr(A) - 3)`, the scalar excess polymer stretch above equilibrium; use
+`--left-field D2` to plot the deformation-rate invariant instead. The
+conformation tensor is `A = I` at equilibrium, so `tr(A) - 3` is a rotationally
+invariant measure of the total polymer extension. In the Oldroyd-B limit it is
+proportional to the trace of the polymeric extra stress. It does not identify
+the direction of stretching or distinguish it from shear-induced anisotropy.
+Non-positive values (including equilibrium) and the gas are masked, because
+they are outside the domain of the logarithm rather than small physical values.
+
+The left diagnostic uses `hot_r` with its colourbar on the left, `|u|` uses
 `Blues` with dark blue fixed at the imposed impact speed `U0 = 1`, and
 liquid-only streamlines are overlaid. Use `--no-streamlines` to suppress them
 or `--impact-speed` when a run uses a different velocity scale.
-The default `D2` range is always `[-3, 1]`; only explicit `--left-vmin` and
-`--left-vmax` options override it.
+The default range for both logarithmic left diagnostics is `[-3, 1]`; only
+explicit `--left-vmin` and `--left-vmax` options override it.
 The VOF interface is a single magenta line, chosen to remain visible on both
 the `hot_r` and `Blues` halves without a contrasting under-stroke.
 
@@ -36,6 +44,11 @@ python3 postProcess/render_one.py \
 ```
 
 Both helper programs restore the full VE/contact-line solver state and write
-their machine-readable output to standard output. They currently target
-single-process/OpenMP snapshots; distributed MPI dumps need extraction with the
-same MPI restore layout that produced them.
+their machine-readable output to standard output. A serial helper built against
+the producing Basilisk tree can read the present MPI snapshots for visual
+inspection. In contrast, the MPI helper restore path currently fails inside
+`restore_mpi()` even for the `t = 0` dump, so it is not used for rendering.
+The fresh four-rank run reached `t = 2.33026` and wrote 24 readable snapshots
+before exiting with status 1, but produced no solver-side diagnostic or stack
+trace. Host NIC hardware-hang messages appeared in the same period; that is a
+correlation to investigate, not an established cause of the solver exit.

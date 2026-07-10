@@ -31,7 +31,7 @@ def parse_args() -> argparse.Namespace:
                         help="Render the available snapshot nearest this time.")
     parser.add_argument("-o", "--output", type=Path)
     parser.add_argument("--ny", type=int, default=400)
-    parser.add_argument("--left-field", choices=("D2", "trA"), default="D2")
+    parser.add_argument("--left-field", choices=("D2", "trA"), default="trA")
     parser.add_argument("--zmin", type=float, default=0.)
     parser.add_argument("--zmax", type=float, default=4.)
     parser.add_argument("--rmax", type=float, default=4.)

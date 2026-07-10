@@ -28,7 +28,7 @@ FIELD_INDEX = {"D2": 2, "vel": 3, "trA": 4, "ux": 5, "uy": 6, "f": 7}
 FIELD_LABEL = {
     "D2": r"$\log_{10}\!\left(\|\mathcal{D}\|^2\right)$",
     "vel": r"$|\mathbf{u}|$",
-    "trA": r"$\log_{10}\!\left(\mathrm{tr}(\mathbf{A})/3-1\right)$",
+    "trA": r"$\log_{10}\!\left(\mathrm{tr}(\mathbf{A})-3\right)$",
 }
 
 
@@ -55,7 +55,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--end-time", type=float)
     parser.add_argument("--no-clean-frames", dest="clean_frames",
                         action="store_false", default=True)
-    parser.add_argument("--left-field", choices=("D2", "trA"), default="D2")
+    parser.add_argument("--left-field", choices=("D2", "trA"), default="trA")
     parser.add_argument("--zmin", type=float, default=0.,
                         help="Default axial lower bound (default: 0).")
     parser.add_argument("--zmax", type=float, default=4.,
@@ -265,8 +265,8 @@ def finite_limits(field: Any) -> tuple[float | None, float | None]:
 
 
 def default_left_limits(field_name: str, field: Any) -> tuple[float | None, float | None]:
-    """Use a fixed, comparable D2 scale; infer limits only for trA."""
-    if field_name == "D2":
+    """Use fixed, comparable limits for the logarithmic left diagnostics."""
+    if field_name in {"D2", "trA"}:
         return -3., 1.
     return finite_limits(field)
 
@@ -299,9 +299,12 @@ def render_frame(output: Path, snapshot: Path, facet_bin: Path, data_bin: Path,
                                     physical_ymin, args.xmax, physical_ymax, args.ny)
     radii, velocity = mirrored(fields["vel"], ys)
     _, left = mirrored(fields[args.left_field], ys)
-    left[:, radii > 0.] = np.ma.masked
-    _, axial_velocity, radial_velocity = mirrored_velocity(fields["ux"], fields["uy"], ys)
     _, liquid = mirrored(fields["f"], ys)
+    left = np.ma.masked_where((radii[None, :] > 0.) | (liquid < .5), left)
+    if args.left_field == "trA":
+        # tr(A)-3 <= 0 is outside log10's domain (including equilibrium).
+        left = np.ma.masked_where(left <= -9.99, left)
+    _, axial_velocity, radial_velocity = mirrored_velocity(fields["ux"], fields["uy"], ys)
     x_extent, r_extent = extent(xs), extent(radii)
     figure, axis = plt.subplots(figsize=(10.5, 5.8), dpi=180)
     figure.subplots_adjust(left=.14, right=.86, bottom=.13, top=.87)
@@ -310,7 +313,7 @@ def render_frame(output: Path, snapshot: Path, facet_bin: Path, data_bin: Path,
                                  vmin=limits[0], vmax=limits[1])
     left_image = axis.imshow(left, origin="lower", aspect="equal",
                              extent=(*r_extent, *x_extent),
-                             cmap="hot_r" if args.left_field == "D2" else "RdBu_r",
+                             cmap="hot_r",
                              vmin=limits[2], vmax=limits[3], alpha=.82)
     if args.streamlines:
         liquid_only = np.ma.masked_where(liquid < .5, radial_velocity)
