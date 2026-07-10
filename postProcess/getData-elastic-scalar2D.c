@@ -1,7 +1,7 @@
 /**
 # Scalar diagnostics for VE drop-impact snapshots
 
-Restore the complete solver state and sample `D2`, velocity, excess
+Restore the complete solver state and sample `D2`, velocity, normalised
 conformation trace, and liquid-fraction diagnostics on a uniform physical
 half-plane grid.
 
@@ -69,11 +69,11 @@ int main (int argc, char * argv[])
     vel[] = sqrt(sq(u.x[]) + sq(u.y[]));
     ux[] = u.x[];
     uy[] = u.y[];
-    // A = I at polymer equilibrium, so tr(A) - 3 measures total excess
-    // polymer stretch.  Keep a sentinel outside the positive log domain;
-    // the renderer masks it rather than presenting it as a physical value.
-    trA[] = A11[] + A22[] + AThTh[] - 3.;
-    trA[] = trA[] > 1e-12 ? log10(trA[]) : -10.;
+    // A = I at polymer equilibrium, hence log10(tr(A)/3) = 0 there.
+    // Negative/positive values denote reduced/increased isotropic polymer
+    // extension. Keep a sentinel only for the invalid log domain.
+    trA[] = A11[] + A22[] + AThTh[];
+    trA[] = trA[] > 1e-12 ? log10(trA[]/3.) : -10.;
   }
 
   Deltay = (ymax - ymin)/ny;

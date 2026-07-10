@@ -10,23 +10,22 @@ python3 postProcess/VideoAxi.py \
 ```
 
 Use `--skip-video` to retain PNG frames only. By default the left half shows
-`log10(tr(A) - 3)`, the scalar excess polymer stretch above equilibrium; use
+`log10(tr(A)/3)`, the normalised isotropic polymer extension; use
 `--left-field D2` to plot the deformation-rate invariant instead. The
-conformation tensor is `A = I` at equilibrium, so `tr(A) - 3` is a rotationally
-invariant measure of the total polymer extension. In the Oldroyd-B limit it is
-proportional to the trace of the polymeric extra stress. It does not identify
-the direction of stretching or distinguish it from shear-induced anisotropy.
-Non-positive values (including equilibrium) and the gas are masked, because
-they are outside the domain of the logarithm rather than small physical values.
+conformation tensor is `A = I` at equilibrium, so `log10(tr(A)/3) = 0` there.
+Negative values indicate a reduced total extension relative to equilibrium,
+and positive values an increased extension. This scalar is rotationally
+invariant, but does not identify the stretch direction or distinguish it from
+shear-induced anisotropy. Only a non-positive trace and the gas are masked,
+because they are outside the logarithm's domain.
 
-The trace diagnostic uses reversed perceptually ordered `magma` (bright low
-stretch to dark high stretch); `D2` retains `hot_r`. Both use the colourbar on
-the left. `|u|` uses `Blues` with dark blue fixed at the imposed impact speed
-`U0 = 1`, and lime-green liquid-only streamlines are overlaid. Use
-`--no-streamlines` to suppress them or `--impact-speed` when a run uses a
-different velocity scale.
-The default range for both logarithmic left diagnostics is `[-3, 1]`; only
-explicit `--left-vmin` and `--left-vmax` options override it.
+The trace diagnostic uses the diverging `PuOr` scale, with compression and
+stretch placed symmetrically about zero; `D2` retains `hot_r`. Both use the
+colourbar on the left. `|u|` uses `Blues` with dark blue fixed at the imposed
+impact speed `U0 = 1`, and lime-green liquid-only streamlines are overlaid.
+Use `--no-streamlines` to suppress them or `--impact-speed` when a run uses a
+different velocity scale. The default range is `[-2, 2]` for the trace and
+`[-3, 1]` for `D2`; explicit `--left-vmin` and `--left-vmax` override it.
 The VOF interface is a single magenta line, chosen to remain visible on both
 the `hot_r` and `Blues` halves without a contrasting under-stroke.
 

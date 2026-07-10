@@ -28,7 +28,7 @@ FIELD_INDEX = {"D2": 2, "vel": 3, "trA": 4, "ux": 5, "uy": 6, "f": 7}
 FIELD_LABEL = {
     "D2": r"$\log_{10}\!\left(\|\mathcal{D}\|^2\right)$",
     "vel": r"$|\mathbf{u}|$",
-    "trA": r"$\log_{10}\!\left(\mathrm{tr}(\mathbf{A})-3\right)$",
+    "trA": r"$\log_{10}\!\left(\mathrm{tr}(\mathbf{A})/3\right)$",
 }
 
 
@@ -266,8 +266,10 @@ def finite_limits(field: Any) -> tuple[float | None, float | None]:
 
 def default_left_limits(field_name: str, field: Any) -> tuple[float | None, float | None]:
     """Use fixed, comparable limits for the logarithmic left diagnostics."""
-    if field_name in {"D2", "trA"}:
+    if field_name == "D2":
         return -3., 1.
+    if field_name == "trA":
+        return -2., 2.
     return finite_limits(field)
 
 
@@ -302,7 +304,7 @@ def render_frame(output: Path, snapshot: Path, facet_bin: Path, data_bin: Path,
     _, liquid = mirrored(fields["f"], ys)
     left = np.ma.masked_where((radii[None, :] > 0.) | (liquid < .5), left)
     if args.left_field == "trA":
-        # tr(A)-3 <= 0 is outside log10's domain (including equilibrium).
+        # A non-positive trace is outside log10's domain; equilibrium is zero.
         left = np.ma.masked_where(left <= -9.99, left)
     _, axial_velocity, radial_velocity = mirrored_velocity(fields["ux"], fields["uy"], ys)
     x_extent, r_extent = extent(xs), extent(radii)
@@ -313,7 +315,7 @@ def render_frame(output: Path, snapshot: Path, facet_bin: Path, data_bin: Path,
                                  vmin=limits[0], vmax=limits[1])
     left_image = axis.imshow(left, origin="lower", aspect="equal",
                              extent=(*r_extent, *x_extent),
-                             cmap="magma_r" if args.left_field == "trA" else "hot_r",
+                             cmap="PuOr" if args.left_field == "trA" else "hot_r",
                              vmin=limits[2], vmax=limits[3], alpha=.82)
     if args.streamlines:
         liquid_only = np.ma.masked_where(liquid < .5, radial_velocity)
