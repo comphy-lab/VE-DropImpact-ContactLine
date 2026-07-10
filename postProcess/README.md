@@ -16,6 +16,11 @@ By default, `D2` uses `hot_r` with its colourbar on the left, `|u|` uses
 liquid-only streamlines are overlaid. Use `--no-streamlines` to suppress them
 or `--impact-speed` when a run uses a different velocity scale.
 
+The default impact window is `r in [-4, 4]`, `z in [0, 4]`. The compact
+colourbars are centred beside the image and limited to 72% of the image-box
+height. Override the window with `--rmax`, `--zmin`, `--zmax`, or individual
+`--xmin`/`--xmax`/`--ymin`/`--ymax` bounds.
+
 `render_one.py` is deliberately serial and renders the latest available
 snapshot by default. Select a particular dump with `--snapshot` or the nearest
 available time with `--time`.

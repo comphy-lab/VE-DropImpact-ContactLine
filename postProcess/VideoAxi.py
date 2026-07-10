@@ -56,10 +56,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-clean-frames", dest="clean_frames",
                         action="store_false", default=True)
     parser.add_argument("--left-field", choices=("D2", "trA"), default="D2")
+    parser.add_argument("--zmin", type=float, default=0.,
+                        help="Default axial lower bound (default: 0).")
+    parser.add_argument("--zmax", type=float, default=4.,
+                        help="Default axial upper bound (default: 4).")
+    parser.add_argument("--rmax", type=float, default=4.,
+                        help="Default radial half-width (default: 4).")
     parser.add_argument("--xmin", type=float,
-                        help="Minimum axial coordinate; defaults to facets.")
+                        help="Override the axial lower bound.")
     parser.add_argument("--xmax", type=float,
-                        help="Maximum axial coordinate; defaults to facets.")
+                        help="Override the axial upper bound.")
     parser.add_argument("--ymin", type=float,
                         help="Minimum plotted radius; defaults to facets.")
     parser.add_argument("--ymax", type=float,
@@ -236,6 +242,16 @@ def resolve_window(facets: Any, xmin: float | None, xmax: float | None,
     return answer
 
 
+def requested_window(args: Any) -> tuple[float, float, float, float]:
+    """Return explicit impact-domain bounds, allowing per-bound overrides."""
+    return (
+        args.zmin if args.xmin is None else args.xmin,
+        args.zmax if args.xmax is None else args.xmax,
+        -args.rmax if args.ymin is None else args.ymin,
+        args.rmax if args.ymax is None else args.ymax,
+    )
+
+
 def finite_limits(field: Any) -> tuple[float | None, float | None]:
     ensure_plotting()
     values = field.compressed()
@@ -280,8 +296,8 @@ def render_frame(output: Path, snapshot: Path, facet_bin: Path, data_bin: Path,
     _, axial_velocity, radial_velocity = mirrored_velocity(fields["ux"], fields["uy"], ys)
     _, liquid = mirrored(fields["f"], ys)
     x_extent, r_extent = extent(xs), extent(radii)
-    figure, axis = plt.subplots(figsize=(7.2, 8.5), dpi=180)
-    figure.subplots_adjust(left=.20, right=.80, bottom=.06, top=.91)
+    figure, axis = plt.subplots(figsize=(10.5, 5.8), dpi=180)
+    figure.subplots_adjust(left=.14, right=.86, bottom=.13, top=.87)
     velocity_image = axis.imshow(velocity, origin="lower", aspect="equal",
                                  extent=(*r_extent, *x_extent), cmap="Blues",
                                  vmin=limits[0], vmax=limits[1])
@@ -308,12 +324,17 @@ def render_frame(output: Path, snapshot: Path, facet_bin: Path, data_bin: Path,
     axis.set(xlim=(args.ymin, args.ymax), ylim=(args.xmin, args.xmax),
              title=rf"$t={snapshot_time(snapshot):.4f}$")
     axis.set_axis_off()
-    left_bar = figure.add_axes([.055, .17, .027, .64])
+    figure.canvas.draw()
+    box = axis.get_position()
+    bar_height = .72*box.height
+    bar_bottom = box.y0 + .14*box.height
+    bar_width = .014
+    left_bar = figure.add_axes([box.x0 - .040, bar_bottom, bar_width, bar_height])
     left_colorbar = figure.colorbar(left_image, cax=left_bar,
                                     label=FIELD_LABEL[args.left_field])
     left_colorbar.ax.yaxis.set_ticks_position("left")
     left_colorbar.ax.yaxis.set_label_position("left")
-    right_bar = figure.add_axes([.865, .17, .027, .64])
+    right_bar = figure.add_axes([box.x1 + .026, bar_bottom, bar_width, bar_height])
     figure.colorbar(velocity_image, cax=right_bar, label=FIELD_LABEL["vel"])
     output.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(output, bbox_inches="tight")
@@ -351,8 +372,9 @@ def render_snapshots(snapshots: list[Path], case_dir: Path, frames_dir: Path,
 
 def main() -> int:
     args = parse_args()
-    if args.cpus <= 0 or args.ny <= 2 or args.duration <= 0:
-        print("--cpus, --ny and --duration must be positive (--ny > 2).", file=sys.stderr)
+    if (args.cpus <= 0 or args.ny <= 2 or args.duration <= 0 or args.rmax <= 0
+            or args.zmax <= args.zmin):
+        print("Invalid --cpus, --ny, --duration, --rmax, or z bounds.", file=sys.stderr)
         return 1
     case_dir = args.case_dir.resolve() if args.case_dir else auto_detect_case_dir(
         Path.cwd().resolve(), args.snap_glob)
@@ -384,9 +406,9 @@ def main() -> int:
             ensure_plotting()
             print("Pre-processing: compiling get* helpers...", file=sys.stderr)
             facet_bin, data_bin = precompile_helpers(script_dir, Path(build))
+            requested = requested_window(args)
             args.xmin, args.xmax, args.ymin, args.ymax = resolve_window(
-                get_facets(snapshots[0], facet_bin, case_dir), args.xmin, args.xmax,
-                args.ymin, args.ymax)
+                get_facets(snapshots[0], facet_bin, case_dir), *requested)
             _, _, fields = get_field_grid(
                 snapshots[0], data_bin, case_dir, args.xmin, 0., args.xmax,
                 max(abs(args.ymin), abs(args.ymax)), args.ny

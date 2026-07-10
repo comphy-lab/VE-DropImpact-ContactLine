@@ -32,6 +32,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("-o", "--output", type=Path)
     parser.add_argument("--ny", type=int, default=400)
     parser.add_argument("--left-field", choices=("D2", "trA"), default="D2")
+    parser.add_argument("--zmin", type=float, default=0.)
+    parser.add_argument("--zmax", type=float, default=4.)
+    parser.add_argument("--rmax", type=float, default=4.)
     parser.add_argument("--xmin", type=float)
     parser.add_argument("--xmax", type=float)
     parser.add_argument("--ymin", type=float)
@@ -62,8 +65,8 @@ def choose_snapshot(video: Any, case_dir: Path, args: argparse.Namespace) -> Pat
 
 def main() -> int:
     args = parse_args()
-    if args.ny <= 2:
-        raise SystemExit("--ny must be > 2")
+    if args.ny <= 2 or args.rmax <= 0 or args.zmax <= args.zmin:
+        raise SystemExit("Invalid --ny, --rmax, or z bounds")
     video = load_video()
     case_dir = args.case_dir.resolve()
     snapshot = choose_snapshot(video, case_dir, args)
@@ -73,8 +76,9 @@ def main() -> int:
         facet_bin, data_bin = video.precompile_helpers(Path(__file__).resolve().parent,
                                                         Path(build))
         facets = video.get_facets(snapshot, facet_bin, case_dir)
-        xmin, xmax, ymin, ymax = video.resolve_window(facets, args.xmin, args.xmax,
-                                                       args.ymin, args.ymax)
+        xmin, xmax, ymin, ymax = video.resolve_window(
+            facets, *video.requested_window(args)
+        )
         _, _, fields = video.get_field_grid(
             snapshot, data_bin, case_dir, xmin, 0., xmax,
             max(abs(ymin), abs(ymax)), args.ny
