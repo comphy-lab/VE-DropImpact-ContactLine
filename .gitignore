@@ -21,6 +21,8 @@ logAxi-scalar.dat
 simulationCases/dropImpactVE/
 simulationCases/figure2-De025/
 simulationCases/*/intermediate/
+**/Video/
+**/render-one*.png
 
 # Compiled binaries / object files
 *.o

@@ -160,7 +160,9 @@ simulationCases/dropImpactVE.c - viscoelastic drop impact with switched contact 
 postProcess/ - post-processing utilities
 postProcess/getFacet2D.c - extract interface facets from a snapshot
 postProcess/getData-elastic-scalar2D.c - extract fields (velocity, stress) from a snapshot
-postProcess/VideoAxi.py - assemble axisymmetric videos
+postProcess/VideoAxi.py - parallel axisymmetric frame/video renderer
+postProcess/render_one.py - serial one-off renderer for the latest/specified snapshot
+postProcess/README.md - rendering commands and options
 runSimulation.sh - root runner for a single case (--case, --input)
 runParameterSweep.sh - root runner for We-De sweeps (--config, --start, --end, --dry-run)
 default-VE.params - default viscoelastic parameters

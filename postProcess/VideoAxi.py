@@ -1,421 +1,392 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+"""Render VE drop-impact snapshots into mirrored axisymmetric PNG frames.
 
-"""
-Basilisk C Simulation Data Post-Processor and Visualizer
-
-This script processes time-series data from Basilisk C multiphase flow simulations,
-generating high-quality visualizations of interfacial dynamics and flow fields.
-It creates contour plots showing strain rate tensor magnitude (D2), velocity fields,
-and viscoelastic stress traces for bubble/drop dynamics studies.
-
-The script supports parallel processing for efficient handling of large time-series
-datasets and produces publication-quality figures with proper LaTeX formatting.
-
-Usage:
-    python viz_simulation.py [--CPUs 8] [--nGFS 550] [--ZMAX 4.0] [--RMAX 2.0] [--ZMIN -4.0]
-
-Dependencies:
-    - numpy: Numerical array operations
-    - matplotlib: Plotting and visualization
-    - subprocess: External executable communication
-    - multiprocessing: Parallel processing support
-    - argparse: Command-line argument parsing
-
-External Dependencies:
-    - ./getFacet2D: Basilisk executable for interface extraction
-    - ./getData-elastic-scalar2D: Basilisk executable for field data extraction
-
-Author: Vatsal Sanjay
-Contact: vatsalsanjay@gmail.com
-Affiliation: Physics of Fluids Group
-Last updated: Jul 24, 2024
+The helpers are compiled once, then each independent snapshot is rendered by
+one worker.  Snapshot times are parsed from the files actually present; no
+synthetic time grid is assumed.
 """
 
-import numpy as np
-import os
-import subprocess as sp
-import matplotlib
-import matplotlib.pyplot as plt
-from matplotlib.collections import LineCollection
-from matplotlib.ticker import StrMethodFormatter
-import multiprocessing as mp
-from functools import partial
+from __future__ import annotations
+
 import argparse
+import math
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+from concurrent.futures import ProcessPoolExecutor
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
 
-import matplotlib.colors as mcolors
+np: Any = None
+plt: Any = None
+LineCollection: Any = None
 
-# ===============================
-# Configuration and Settings
-# ===============================
-
-# Custom colormap for viscoelastic stress visualization
-custom_colors = ["white", "#DA8A67", "#A0522D", "#400000"]
-CUSTOM_CMAP = mcolors.LinearSegmentedColormap.from_list("custom_hot", custom_colors)
-
-# Global matplotlib settings for publication-quality output
-matplotlib.rcParams['font.family'] = 'serif'
-matplotlib.rcParams['text.usetex'] = True
-matplotlib.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}'
-
-# Default visualization parameters
-DEFAULT_CONFIG = {
-    'grids_per_r': 128,          # Grid resolution factor
-    'line_width': 2,             # Interface line width
-    'axes_label_size': 50,       # Font size for axis labels
-    'tick_label_size': 20,       # Font size for tick labels
-    'interface_line_width': 4,   # Line width for interface boundaries
-    'strain_vmax': 2.0,          # Maximum strain rate for colorbar
-    'strain_vmin': -3.0,         # Minimum strain rate for colorbar
-    'stress_vmax': 2.0,          # Maximum stress trace for colorbar
-    'stress_vmin': -3.0,         # Minimum stress trace for colorbar
+FIELD_INDEX = {"D2": 2, "vel": 3, "trA": 4}
+FIELD_LABEL = {
+    "D2": r"$\log_{10}\!\left(\|\mathcal{D}\|^2\right)$",
+    "vel": r"$|\mathbf{u}|$",
+    "trA": r"$\log_{10}\!\left(\mathrm{tr}(\mathbf{A})/3-1\right)$",
 }
 
-# ===============================
-# Interface Extraction Functions
-# ===============================
 
-def gettingFacets(filename, includeCoat='true'):
-    """
-    Extract interface facets from Basilisk simulation data.
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Render VE drop-impact snapshots and optionally assemble an MP4."
+    )
+    parser.add_argument("--case-dir", type=Path,
+                        help="Directory containing intermediate/snapshot-* files.")
+    parser.add_argument("--snap-glob", default="intermediate/snapshot-*")
+    parser.add_argument("--ny", type=int, default=320,
+                        help="Physical radial samples per frame (default: 320).")
+    parser.add_argument("--cpus", "--CPUs", dest="cpus", type=int, default=4,
+                        help="Independent rendering workers (default: 4).")
+    parser.add_argument("--frames-dir", type=Path,
+                        help="PNG directory; default is case-dir/Video.")
+    parser.add_argument("-o", "--output", default="video-axisymmetric.mp4")
+    parser.add_argument("--fps", type=float)
+    parser.add_argument("--duration", type=float, default=10.)
+    parser.add_argument("--ffmpeg", default="ffmpeg")
+    parser.add_argument("--skip-video", action="store_true")
+    parser.add_argument("--max-frames", type=int)
+    parser.add_argument("--start-time", type=float)
+    parser.add_argument("--end-time", type=float)
+    parser.add_argument("--no-clean-frames", dest="clean_frames",
+                        action="store_false", default=True)
+    parser.add_argument("--left-field", choices=("D2", "trA"), default="D2")
+    parser.add_argument("--xmin", type=float,
+                        help="Minimum axial coordinate; defaults to facets.")
+    parser.add_argument("--xmax", type=float,
+                        help="Maximum axial coordinate; defaults to facets.")
+    parser.add_argument("--ymin", type=float,
+                        help="Minimum plotted radius; defaults to facets.")
+    parser.add_argument("--ymax", type=float,
+                        help="Maximum plotted radius; defaults to facets.")
+    parser.add_argument("--vel-vmin", type=float)
+    parser.add_argument("--vel-vmax", type=float)
+    parser.add_argument("--left-vmin", type=float)
+    parser.add_argument("--left-vmax", type=float)
+    return parser.parse_args()
 
-    This function communicates with the Basilisk getFacet2D executable to extract
-    interface polygons from simulation snapshots. It handles both axisymmetric
-    coordinates (r,z) and creates symmetric segments for visualization.
 
-    Args:
-        filename (str): Path to the Basilisk snapshot file
-        includeCoat (str): Whether to include coating layer in extraction.
-                          Accepts 'true' or 'false'. Defaults to 'true'.
+def configure_worker_environment(cache_root: Path | None) -> None:
+    """Give every renderer its own Matplotlib and TeX caches."""
+    if cache_root is None:
+        return
+    root = cache_root / f"worker-{os.getpid()}"
+    for name, env_name in (("mpl", "MPLCONFIGDIR"), ("texmf-var", "TEXMFVAR"),
+                           ("texmf-config", "TEXMFCONFIG")):
+        path = root / name
+        path.mkdir(parents=True, exist_ok=True)
+        os.environ[env_name] = str(path)
+    os.environ["OMP_NUM_THREADS"] = "1"
 
-    Returns:
-        list: List of line segments [(start_point, end_point)] for visualization.
-              Each segment is a tuple ((r1, z1), (r2, z2)) representing interface
-              boundaries.
 
-    Raises:
-        subprocess.CalledProcessError: If the getFacet2D executable fails
-        FileNotFoundError: If the specified snapshot file doesn't exist
+def ensure_plotting() -> None:
+    global np, plt, LineCollection
+    if np is not None:
+        return
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as _plt
+    import numpy as _np
+    from matplotlib.collections import LineCollection as _LineCollection
 
-    Note:
-        The function assumes axisymmetric geometry and creates symmetric segments
-        by mirroring across r=0. This is typical for bubble/drop simulations.
-    """
-    exe = ["./getFacet2D", filename, includeCoat]
+    matplotlib.rcParams.update({
+        "font.family": "serif",
+        "mathtext.fontset": "cm",
+        "axes.linewidth": 1.2,
+    })
+    np, plt, LineCollection = _np, _plt, _LineCollection
+
+
+def snapshot_time(path: Path) -> float:
     try:
-        p = sp.Popen(exe, stdout=sp.PIPE, stderr=sp.PIPE)
-        stdout, stderr = p.communicate()
-    except FileNotFoundError:
-        raise FileNotFoundError(f"getFacet2D executable not found. Ensure it's compiled and in the current directory.")
-
-    temp1 = stderr.decode("utf-8")
-    temp2 = temp1.split("\n")
-    segs = []
-    skip = False
-
-    # Process interface data - skip empty lines and extract coordinate pairs
-    if len(temp2) > 1e2:  # Ensure we have sufficient data points
-        for n1 in range(len(temp2)):
-            temp3 = temp2[n1].split(" ")
-            if temp3 == ['']:
-                skip = False
-                pass
-            else:
-                if not skip:
-                    # Extract paired coordinate points
-                    temp4 = temp2[n1+1].split(" ")
-                    r1, z1 = np.array([float(temp3[1]), float(temp3[0])])
-                    r2, z2 = np.array([float(temp4[1]), float(temp4[0])])
-
-                    # Add symmetric segments for axisymmetric visualization
-                    segs.append(((r1, z1), (r2, z2)))
-                    segs.append(((-r1, z1), (-r2, z2)))
-                    skip = True
-    return segs
+        return float(path.name.split("snapshot-", 1)[1])
+    except (IndexError, ValueError):
+        return math.inf
 
 
-def gettingfield(filename, zmin, zmax, rmax, nr):
-    """
-    Extract field data from Basilisk simulation snapshots.
+def list_snapshots(case_dir: Path, pattern: str) -> list[Path]:
+    return sorted((p for p in case_dir.glob(pattern) if p.is_file()),
+                  key=snapshot_time)
 
-    Communicates with the getData-elastic-scalar2D executable to extract
-    flow field variables including strain rate, velocity, and stress tensors
-    on a uniform grid for visualization.
 
-    Args:
-        filename (str): Path to the Basilisk snapshot file
-        zmin (float): Minimum z-coordinate for data extraction
-        zmax (float): Maximum z-coordinate for data extraction
-        rmax (float): Maximum r-coordinate for data extraction
-        nr (int): Number of grid points in radial direction
+def auto_detect_case_dir(cwd: Path, pattern: str) -> Path:
+    if list_snapshots(cwd, pattern):
+        return cwd
+    candidates = sorted(
+        (p for p in (cwd / "simulationCases").glob("**/*")
+         if p.is_dir() and list_snapshots(p, pattern)),
+        key=lambda p: (p.stat().st_mtime, str(p)),
+    ) if (cwd / "simulationCases").is_dir() else []
+    return candidates[-1] if candidates else cwd
 
-    Returns:
-        tuple: (R, Z, D2, vel, taup, nz) where:
-            - R (numpy.ndarray): Radial coordinate mesh (nz x nr)
-            - Z (numpy.ndarray): Axial coordinate mesh (nz x nr)
-            - D2 (numpy.ndarray): Strain rate tensor magnitude (nz x nr)
-            - vel (numpy.ndarray): Velocity magnitude (nz x nr)
-            - taup (numpy.ndarray): Stress tensor trace (nz x nr)
-            - nz (int): Number of grid points in axial direction
 
-    Raises:
-        subprocess.CalledProcessError: If the getData-elastic-scalar2D executable fails
-        ValueError: If the extracted data dimensions are inconsistent
+def project_root(script_dir: Path) -> Path:
+    return script_dir.parent
 
-    Note:
-        The function automatically determines nz based on the total data points
-        and the specified nr. All returned arrays are reshaped to 2D meshgrids.
-    """
-    exe = ["./getData-elastic-scalar2D", filename, str(zmin), str(0), str(zmax), str(rmax), str(nr)]
+
+def compile_helper(source: Path, output: Path, root: Path) -> None:
+    subprocess.run([
+        "qcc", "-O2", "-Wall", "-disable-dimensions",
+        f"-I{root / 'src-local'}", source.name, "-o", str(output), "-lm",
+    ], cwd=source.parent, check=True)
+
+
+def precompile_helpers(script_dir: Path, build_dir: Path) -> tuple[Path, Path]:
+    if shutil.which("qcc") is None:
+        raise RuntimeError("qcc is not on PATH.")
+    root = project_root(script_dir)
+    facet, data = build_dir / "getFacet2D", build_dir / "getData-elastic-scalar2D"
+    compile_helper(script_dir / "getFacet2D.c", facet, root)
+    compile_helper(script_dir / "getData-elastic-scalar2D.c", data, root)
+    return facet, data
+
+
+def run_capture(command: list[str], cwd: Path) -> str:
+    result = subprocess.run(command, cwd=cwd, text=True, check=True,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    return result.stdout
+
+
+def snapshot_argument(snapshot: Path, case_dir: Path) -> str:
     try:
-        p = sp.Popen(exe, stdout=sp.PIPE, stderr=sp.PIPE)
-        stdout, stderr = p.communicate()
-    except FileNotFoundError:
-        raise FileNotFoundError(f"getData-elastic-scalar2D executable not found. Ensure it's compiled and in the current directory.")
+        return str(snapshot.relative_to(case_dir))
+    except ValueError:
+        return str(snapshot)
 
-    temp1 = stderr.decode("utf-8")
-    temp2 = temp1.split("\n")
 
-    # Initialize temporary lists for field data
-    Rtemp, Ztemp, D2temp, veltemp, taupTemp = [], [], [], [], []
+def parse_facet_segments(raw: str) -> Any:
+    ensure_plotting()
+    points: list[list[float]] = []
+    for line in raw.splitlines():
+        values = line.split()
+        if len(values) < 2:
+            continue
+        try:
+            points.append([float(values[0]), float(values[1])])
+        except ValueError:
+            continue
+    usable = len(points) - len(points) % 2
+    return np.asarray(points[:usable], dtype=float).reshape(-1, 2, 2) \
+        if usable else np.empty((0, 2, 2), dtype=float)
 
-    # Parse field data from executable output
-    for n1 in range(len(temp2)):
-        temp3 = temp2[n1].split(" ")
-        if temp3 == ['']:
-            pass
-        else:
-            Ztemp.append(float(temp3[0]))
-            Rtemp.append(float(temp3[1]))
-            D2temp.append(float(temp3[2]))
-            veltemp.append(float(temp3[3]))
-            taupTemp.append(float(temp3[4]))
 
-    # Convert to numpy arrays and reshape to 2D mesh
-    R = np.asarray(Rtemp)
-    Z = np.asarray(Ztemp)
-    D2 = np.asarray(D2temp)
-    vel = np.asarray(veltemp)
-    taup = np.asarray(taupTemp)
+def get_facets(snapshot: Path, facet_bin: Path, case_dir: Path) -> Any:
+    return parse_facet_segments(run_capture(
+        [str(facet_bin), snapshot_argument(snapshot, case_dir)], case_dir
+    ))
 
-    # Calculate number of axial grid points
-    nz = int(len(Z)/nr)
-    print(f"Grid dimensions: nr={nr}, nz={nz}")
 
-    # Reshape arrays to 2D mesh format
-    R.resize((nz, nr))
-    Z.resize((nz, nr))
-    D2.resize((nz, nr))
-    vel.resize((nz, nr))
-    taup.resize((nz, nr))
+def get_field_grid(snapshot: Path, data_bin: Path, case_dir: Path, xmin: float,
+                   ymin: float, xmax: float, ymax: float, ny: int) -> tuple[Any, Any, dict[str, Any]]:
+    ensure_plotting()
+    raw = run_capture([
+        str(data_bin), snapshot_argument(snapshot, case_dir), f"{xmin:.16g}",
+        f"{ymin:.16g}", f"{xmax:.16g}", f"{ymax:.16g}", str(ny),
+    ], case_dir)
+    rows: list[list[float]] = []
+    for line in raw.splitlines():
+        values = line.split()
+        if len(values) < 5:
+            continue
+        try:
+            rows.append([float(value) for value in values[:5]])
+        except ValueError:
+            continue
+    if not rows:
+        raise RuntimeError(f"No scalar data parsed from {snapshot}")
+    values = np.asarray(rows, dtype=float)
+    xs, ys = np.unique(values[:, 0]), np.unique(values[:, 1])
+    ix, iy = np.searchsorted(xs, values[:, 0]), np.searchsorted(ys, values[:, 1])
+    fields: dict[str, Any] = {}
+    for name, col in FIELD_INDEX.items():
+        grid = np.full((len(xs), len(ys)), np.nan)
+        grid[ix, iy] = values[:, col]
+        invalid = ~np.isfinite(grid) | (np.abs(grid) > 1e20)
+        fields[name] = np.ma.masked_where(invalid, grid)
+    return xs, ys, fields
 
-    return R, Z, D2, vel, taup, nz
 
-# ===============================
-# Visualization Functions
-# ===============================
+def resolve_window(facets: Any, xmin: float | None, xmax: float | None,
+                   ymin: float | None, ymax: float | None) -> tuple[float, float, float, float]:
+    ensure_plotting()
+    if len(facets) == 0:
+        if None in (xmin, xmax, ymin, ymax):
+            raise RuntimeError("No facets found: provide --xmin/--xmax/--ymin/--ymax.")
+        return float(xmin), float(xmax), float(ymin), float(ymax)
+    x, y = facets[..., 0], facets[..., 1]
+    pad = max(float(x.max() - x.min()) * 0.03, 1e-3)
+    radial = max(float(np.abs(y).max()) * 1.08, 1e-3)
+    answer = (float(x.min()) - pad if xmin is None else xmin,
+              float(x.max()) + pad if xmax is None else xmax,
+              -radial if ymin is None else ymin,
+              radial if ymax is None else ymax)
+    if answer[0] >= answer[1] or answer[2] >= answer[3]:
+        raise ValueError("Resolved plot bounds are invalid.")
+    return answer
 
-def process_timestep(ti, folder, nGFS, GridsPerR, rmin, rmax, zmin, zmax, lw):
-    """
-    Process and visualize a single simulation timestep.
 
-    This function handles the complete visualization pipeline for one timestep:
-    extracting interface data, field data, creating dual-sided contour plots
-    with colorbars, and saving the result as a high-resolution image.
+def finite_limits(field: Any) -> tuple[float | None, float | None]:
+    ensure_plotting()
+    values = field.compressed()
+    values = values[np.isfinite(values)]
+    if not values.size:
+        return None, None
+    lo, hi = (float(v) for v in np.percentile(values, [2., 98.]))
+    if not math.isfinite(lo) or not math.isfinite(hi) or lo == hi:
+        return None, None
+    return lo, hi
 
-    Args:
-        ti (int): Timestep index (will be converted to simulation time)
-        folder (str): Output directory for saved images
-        nGFS (int): Total number of simulation files (used for validation)
-        GridsPerR (int): Grid resolution parameter (grids per unit radius)
-        rmin (float): Minimum radial coordinate for plotting
-        rmax (float): Maximum radial coordinate for plotting
-        zmin (float): Minimum axial coordinate for plotting
-        zmax (float): Maximum axial coordinate for plotting
-        lw (float): Line width for boundary boxes
 
-    Returns:
-        None: Function saves visualization directly to file
+def mirrored(field: Any, radii: Any) -> tuple[Any, Any]:
+    r = np.concatenate((-radii[::-1], radii))
+    return r, np.ma.concatenate((field[:, ::-1], field), axis=1)
 
-    Note:
-        - Creates symmetric visualization about r=0 axis
-        - Uses logarithmic scaling for strain rate and stress data
-        - Implements custom colormap for viscoelastic stress fields
-        - Handles missing files gracefully with informative error messages
-    """
-    # Convert timestep index to simulation time
-    t = 0.01 * ti
-    place = f"intermediate/snapshot-{t:.4f}"
-    name = f"{folder}/{int(t*1000):08d}.png"
 
-    # Check if input file exists
-    if not os.path.exists(place):
-        print(f"{place} File not found!")
+def extent(centres: Any) -> tuple[float, float]:
+    delta = float(np.median(np.diff(centres))) if len(centres) > 1 else 1.
+    return float(centres[0] - delta/2.), float(centres[-1] + delta/2.)
+
+
+def render_frame(output: Path, snapshot: Path, facet_bin: Path, data_bin: Path,
+                 case_dir: Path, args: Any, limits: tuple[Any, Any, Any, Any]) -> Path:
+    """Render a mirrored D2/trA and velocity diagnostic for one snapshot."""
+    ensure_plotting()
+    facets = get_facets(snapshot, facet_bin, case_dir)
+    physical_ymin, physical_ymax = 0., max(abs(args.ymin), abs(args.ymax))
+    xs, ys, fields = get_field_grid(snapshot, data_bin, case_dir, args.xmin,
+                                    physical_ymin, args.xmax, physical_ymax, args.ny)
+    radii, velocity = mirrored(fields["vel"], ys)
+    _, left = mirrored(fields[args.left_field], ys)
+    left[:, radii > 0.] = np.ma.masked
+    x_extent, r_extent = extent(xs), extent(radii)
+    figure, axis = plt.subplots(figsize=(7.2, 8.5), dpi=180)
+    velocity_image = axis.imshow(velocity, origin="lower", aspect="equal",
+                                 extent=(*r_extent, *x_extent), cmap="viridis",
+                                 vmin=limits[0], vmax=limits[1])
+    left_image = axis.imshow(left, origin="lower", aspect="equal",
+                             extent=(*r_extent, *x_extent),
+                             cmap="inferno" if args.left_field == "D2" else "RdBu_r",
+                             vmin=limits[2], vmax=limits[3], alpha=.82)
+    if len(facets):
+        segments = facets[..., [1, 0]]
+        reflected = segments.copy()
+        reflected[..., 0] *= -1.
+        interface = np.concatenate((reflected, segments))
+        axis.add_collection(LineCollection(interface, colors="white", linewidths=2.3))
+        axis.add_collection(LineCollection(interface, colors="black", linewidths=1.1))
+    axis.axvline(0., color="0.5", linestyle="--", linewidth=.8)
+    axis.set(xlim=(args.ymin, args.ymax), ylim=(args.xmin, args.xmax),
+             title=rf"$t={snapshot_time(snapshot):.4f}$")
+    axis.set_axis_off()
+    figure.colorbar(velocity_image, ax=axis, fraction=.042, pad=.03,
+                    label=FIELD_LABEL["vel"])
+    figure.colorbar(left_image, ax=axis, fraction=.042, pad=.10,
+                    label=FIELD_LABEL[args.left_field])
+    output.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output, bbox_inches="tight")
+    plt.close(figure)
+    return output
+
+
+def worker(index: int, snapshot: Path, case_dir: Path, frames_dir: Path,
+           facet_bin: Path, data_bin: Path, args: Any, limits: tuple[Any, Any, Any, Any],
+           cache_root: Path | None) -> tuple[int, Path]:
+    configure_worker_environment(cache_root)
+    return index, render_frame(frames_dir / f"frame_{index:06d}.png", snapshot,
+                               facet_bin, data_bin, case_dir, args, limits)
+
+
+def render_snapshots(snapshots: list[Path], case_dir: Path, frames_dir: Path,
+                     facet_bin: Path, data_bin: Path, args: Any,
+                     limits: tuple[Any, Any, Any, Any], cache_root: Path | None) -> None:
+    tasks = list(enumerate(snapshots))
+    if args.cpus == 1:
+        for index, snapshot in tasks:
+            _, output = worker(index, snapshot, case_dir, frames_dir, facet_bin,
+                               data_bin, args, limits, cache_root)
+            print(f"[{index + 1}/{len(tasks)}] wrote {output}", file=sys.stderr)
         return
+    with ProcessPoolExecutor(max_workers=args.cpus) as executor:
+        for start in range(0, len(tasks), args.cpus):
+            batch = tasks[start:start + args.cpus]
+            results = [executor.submit(worker, index, snapshot, case_dir, frames_dir,
+                                       facet_bin, data_bin, args, limits, cache_root)
+                       for index, snapshot in batch]
+            for index, output in sorted((future.result() for future in results)):
+                print(f"[{index + 1}/{len(tasks)}] wrote {output}", file=sys.stderr)
 
-    # Skip if output already exists
-    if os.path.exists(name):
-        print(f"{name} Image present!")
-        return
 
-    # Extract interface data with and without coating
-    segs1 = gettingFacets(place)          # With coating
-    segs2 = gettingFacets(place, 'false') # Without coating
+def main() -> int:
+    args = parse_args()
+    if args.cpus <= 0 or args.ny <= 2 or args.duration <= 0:
+        print("--cpus, --ny and --duration must be positive (--ny > 2).", file=sys.stderr)
+        return 1
+    case_dir = args.case_dir.resolve() if args.case_dir else auto_detect_case_dir(
+        Path.cwd().resolve(), args.snap_glob)
+    snapshots = list_snapshots(case_dir, args.snap_glob)
+    if args.start_time is not None:
+        snapshots = [p for p in snapshots if snapshot_time(p) >= args.start_time]
+    if args.end_time is not None:
+        snapshots = [p for p in snapshots if snapshot_time(p) <= args.end_time]
+    if args.max_frames is not None:
+        snapshots = snapshots[:args.max_frames]
+    if not snapshots:
+        print(f"No snapshots found in {case_dir} matching {args.snap_glob!r}.", file=sys.stderr)
+        return 1
+    if not args.skip_video and shutil.which(args.ffmpeg) is None:
+        print(f"ffmpeg is not available: {args.ffmpeg}", file=sys.stderr)
+        return 1
+    frames_dir = (args.frames_dir or case_dir / "Video")
+    frames_dir = frames_dir if frames_dir.is_absolute() else case_dir / frames_dir
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    if args.clean_frames:
+        for frame in frames_dir.glob("frame_*.png"):
+            frame.unlink()
 
-    # Validate interface data
-    if not segs1 and not segs2:
-        print(f"Problem in the available file {place}")
-        return
-
-    # Extract field data on uniform grid
-    nr = int(GridsPerR * rmax)
-    R, Z, taus, vel, taup, nz = gettingfield(place, zmin, zmax, rmax, nr)
-    zminp, zmaxp, rminp, rmaxp = Z.min(), Z.max(), R.min(), R.max()
-
-    # ===============================
-    # Create Visualization
-    # ===============================
-
-    AxesLabel, TickLabel = DEFAULT_CONFIG['axes_label_size'], DEFAULT_CONFIG['tick_label_size']
-    fig, ax = plt.subplots()
-    fig.set_size_inches(19.20, 10.80)  # High-resolution output
-
-    # Draw boundary box and symmetry axis
-    ax.plot([0, 0], [zmin, zmax], '-.', color='grey', linewidth=lw)  # Symmetry axis
-    ax.plot([rmin, rmin], [zmin, zmax], '-', color='black', linewidth=lw)
-    ax.plot([rmin, rmax], [zmin, zmin], '-', color='black', linewidth=lw)
-    ax.plot([rmin, rmax], [zmax, zmax], '-', color='black', linewidth=lw)
-    ax.plot([rmax, rmax], [zmin, zmax], '-', color='black', linewidth=lw)
-
-    # Add interface lines
-    line_segments = LineCollection(segs2, linewidths=DEFAULT_CONFIG['interface_line_width'],
-                                 colors='green', linestyle='solid')
-    ax.add_collection(line_segments)
-    line_segments = LineCollection(segs1, linewidths=DEFAULT_CONFIG['interface_line_width'],
-                                 colors='blue', linestyle='solid')
-    ax.add_collection(line_segments)
-
-    # Create strain rate contour plot (left side, mirrored)
-    cntrl1 = ax.imshow(taus, cmap="hot_r", interpolation='Bilinear', origin='lower',
-                      extent=[-rminp, -rmaxp, zminp, zmaxp],
-                      vmax=DEFAULT_CONFIG['strain_vmax'], vmin=DEFAULT_CONFIG['strain_vmin'])
-
-    # Create stress trace contour plot (right side)
-    cntrl2 = ax.imshow(taup, interpolation='Bilinear', cmap=CUSTOM_CMAP, origin='lower',
-                      extent=[rminp, rmaxp, zminp, zmaxp],
-                      vmax=DEFAULT_CONFIG['stress_vmax'], vmin=DEFAULT_CONFIG['stress_vmin'])
-
-    # Set plot properties
-    ax.set_aspect('equal')
-    ax.set_xlim(rmin, rmax)
-    ax.set_ylim(zmin, zmax)
-    ax.set_title(f'$t/\\tau_\\gamma$ = {t:4.3f}', fontsize=TickLabel)
-
-    # Add colorbars
-    l, b, w, h = ax.get_position().bounds
-
-    # Left colorbar for strain rate
-    cb1 = fig.add_axes([l-0.04, b, 0.03, h])
-    c1 = plt.colorbar(cntrl1, cax=cb1, orientation='vertical')
-    c1.set_label(r'$\log_{10}\left(\|\mathcal{D}\|\right)$', fontsize=TickLabel, labelpad=5)
-    c1.ax.tick_params(labelsize=TickLabel)
-    c1.ax.yaxis.set_ticks_position('left')
-    c1.ax.yaxis.set_label_position('left')
-    c1.ax.yaxis.set_major_formatter(StrMethodFormatter('{x:,.1f}'))
-
-    # Right colorbar for stress trace
-    cb2 = fig.add_axes([l+w+0.01, b, 0.03, h])
-    c2 = plt.colorbar(cntrl2, cax=cb2, orientation='vertical')
-    c2.ax.tick_params(labelsize=TickLabel)
-    c2.set_label(r'$\log_{10}\left(\text{tr}\left(\mathcal{A}\right)-1\right)$', fontsize=TickLabel)
-    c2.ax.yaxis.set_major_formatter(StrMethodFormatter('{x:,.2f}'))
-
-    ax.axis('off')  # Remove axis ticks and labels for cleaner look
-
-    # Save high-quality output
-    plt.savefig(name, bbox_inches="tight", dpi=300)
-    plt.close()  # Free memory
-
-# ===============================
-# Main Execution Function
-# ===============================
-
-def main():
-    """
-    Main function that orchestrates the parallel processing of simulation data.
-
-    Sets up command-line argument parsing, configures multiprocessing pool,
-    and coordinates the visualization of multiple timesteps in parallel.
-    Uses all available CPU cores by default for optimal performance.
-
-    Command-line Arguments:
-        --CPUs (int): Number of CPU cores to use (default: all available)
-        --nGFS (int): Number of simulation timesteps to process (default: 550)
-        --ZMAX (float): Maximum axial coordinate (default: 4.0)
-        --RMAX (float): Maximum radial coordinate (default: 2.0)
-        --ZMIN (float): Minimum axial coordinate (default: -4.0)
-
-    Returns:
-        None: Creates output directory and processes all timesteps
-
-    Example:
-        # Process 1000 timesteps using 16 CPU cores
-        python viz_simulation.py --CPUs 16 --nGFS 1000 --ZMAX 5.0
-
-    Note:
-        The output directory 'Video' is created automatically if it doesn't exist.
-        Each timestep is processed independently, allowing for efficient parallel execution.
-    """
-    # Set up command-line argument parsing
-    parser = argparse.ArgumentParser(description="Process Basilisk simulation data for visualization")
-    parser.add_argument('--CPUs', type=int, default=mp.cpu_count(),
-                       help='Number of CPUs to use (default: all available)')
-    parser.add_argument('--nGFS', type=int, default=550,
-                       help='Number of restart files to process (default: 550)')
-    parser.add_argument('--ZMAX', type=float, default=4.0,
-                       help='Maximum Z value (default: 4.0)')
-    parser.add_argument('--RMAX', type=float, default=2.0,
-                       help='Maximum R value (default: 2.0)')
-    parser.add_argument('--ZMIN', type=float, default=-4.0,
-                       help='Minimum Z value (default: -4.0)')
-    args = parser.parse_args()
-
-    # Extract parameters
-    CPUStoUse = args.CPUs
-    nGFS = args.nGFS
-    ZMAX = args.ZMAX
-    RMAX = args.RMAX
-    ZMIN = args.ZMIN
-
-    # Set processing parameters
-    num_processes = CPUStoUse
-    rmin, rmax, zmin, zmax = [-RMAX, RMAX, ZMIN, ZMAX]
-    GridsPerR = DEFAULT_CONFIG['grids_per_r']
-    lw = DEFAULT_CONFIG['line_width']
-    folder = 'Video'
-
-    # Create output directory
-    if not os.path.isdir(folder):
-        os.makedirs(folder)
-        print(f"Created output directory: {folder}")
-
-    print(f"Starting visualization process with {num_processes} CPUs...")
-    print(f"Processing {nGFS} timesteps from {ZMIN} to {ZMAX} in Z and {-RMAX} to {RMAX} in R")
-
-    # Create multiprocessing pool and process all timesteps
-    with mp.Pool(processes=num_processes) as pool:
-        # Create partial function with fixed arguments
-        process_func = partial(process_timestep,
-                             folder=folder, nGFS=nGFS,
-                             GridsPerR=GridsPerR, rmin=rmin, rmax=rmax,
-                             zmin=zmin, zmax=zmax, lw=lw)
-
-        # Map the processing function to all timesteps
-        timesteps = list(range(nGFS))
-        pool.map(process_func, timesteps)
-
-    print(f"Visualization complete! Images saved in {folder}/")
+    script_dir = Path(__file__).resolve().parent
+    with tempfile.TemporaryDirectory(prefix="ve-post-tools-", dir=case_dir) as build:
+      with tempfile.TemporaryDirectory(prefix="ve-post-cache-", dir=case_dir) as cache:
+        try:
+            configure_worker_environment(Path(cache))
+            ensure_plotting()
+            print("Pre-processing: compiling get* helpers...", file=sys.stderr)
+            facet_bin, data_bin = precompile_helpers(script_dir, Path(build))
+            args.xmin, args.xmax, args.ymin, args.ymax = resolve_window(
+                get_facets(snapshots[0], facet_bin, case_dir), args.xmin, args.xmax,
+                args.ymin, args.ymax)
+            _, _, fields = get_field_grid(
+                snapshots[0], data_bin, case_dir, args.xmin, 0., args.xmax,
+                max(abs(args.ymin), abs(args.ymax)), args.ny
+            )
+            vel_limits = finite_limits(fields["vel"])
+            left_limits = finite_limits(fields[args.left_field])
+            limits = (args.vel_vmin if args.vel_vmin is not None else vel_limits[0],
+                      args.vel_vmax if args.vel_vmax is not None else vel_limits[1],
+                      args.left_vmin if args.left_vmin is not None else left_limits[0],
+                      args.left_vmax if args.left_vmax is not None else left_limits[1])
+            render_snapshots(snapshots, case_dir, frames_dir, facet_bin, data_bin,
+                             args, limits, Path(cache))
+            if args.skip_video:
+                print(f"Frames written to {frames_dir}", file=sys.stderr)
+                return 0
+            fps = args.fps if args.fps is not None else len(snapshots)/args.duration
+            output = Path(args.output)
+            output = output if output.is_absolute() else case_dir / output
+            subprocess.run([args.ffmpeg, "-y", "-framerate", f"{fps:.6g}",
+                            "-pattern_type", "glob", "-i", str(frames_dir / "frame_*.png"),
+                            "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-c:v", "libx264",
+                            "-r", f"{fps:.6g}", "-pix_fmt", "yuv420p", str(output)], check=True)
+            print(f"Wrote video: {output}", file=sys.stderr)
+            return 0
+        except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError) as error:
+          print(f"Error: {error}", file=sys.stderr)
+          return 2
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -18,6 +18,10 @@ CoMPhy elastocapillary Worthington-jet drop-bounce study.
   - `case-params.h`: `key = value` parameter-file parser.
 - `simulationCases/dropImpactVE.c`: the simulation entry point.
 - `postProcess/`: facet/field extraction and axisymmetric video tools.
+  - `VideoAxi.py` discovers real snapshot files, compiles both helpers once,
+    and renders independent PNG frames in `--cpus` / `--CPUs` worker batches.
+  - `render_one.py` reuses that pipeline serially for the latest, selected, or
+    nearest-time snapshot. Both tools currently target serial/OpenMP dumps.
 - `runSimulation.sh`: root runner for a single case (`--case`, `--input`).
 - `runParameterSweep.sh`: root runner for We-De sweeps (`--config`,
   `--start`, `--end`, `--dry-run`).
