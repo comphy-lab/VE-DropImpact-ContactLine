@@ -18,13 +18,20 @@ OUT_BASE="${REPO_ROOT}/simulationCases/dropImpactVE"
 
 usage() {
   cat <<'EOF'
-Usage: runParameterSweep.sh [--config FILE] [--start N] [--end M] [--dry-run]
+Usage: runParameterSweep.sh [--config FILE] [--start N] [--end M]
+                            [--out-subdir DIR] [--generate-only] [--dry-run]
 
 Options:
   --config FILE  Sweep config (default: sweep-fixedBeta.params).
                  Provided: sweep-fixedBeta.params, sweep-fixedEc.params.
   --start N      First CaseNo to run (default 1).
   --end M        Last CaseNo to run (default = total number of cases).
+  --out-subdir DIR
+                 Write cases below simulationCases/DIR rather than the
+                 legacy simulationCases/dropImpactVE root.
+  --generate-only
+                 Write the deterministic case.params files but do not compile
+                 or execute the solver. Intended for Slurm pack launchers.
   --dry-run      Print the generated case plan and exit (no compile/run).
   --help         Show this help.
 
@@ -36,6 +43,8 @@ EOF
 CONFIG="${REPO_ROOT}/sweep-fixedBeta.params"
 CASE_START=1
 CASE_END=""
+OUT_SUBDIR=""
+GENERATE_ONLY=0
 DRY_RUN=0
 
 while [ "$#" -gt 0 ]; do
@@ -43,6 +52,8 @@ while [ "$#" -gt 0 ]; do
     --config) CONFIG="$2"; shift 2 ;;
     --start)  CASE_START="$2"; shift 2 ;;
     --end)    CASE_END="$2"; shift 2 ;;
+    --out-subdir) OUT_SUBDIR="$2"; shift 2 ;;
+    --generate-only) GENERATE_ONLY=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     --help|-h) usage; exit 0 ;;
     *) echo "Unknown option: $1"; usage; exit 1 ;;
@@ -75,6 +86,7 @@ EC=$(cfg Ec)
 MAXLEVEL=$(cfg MAXlevel)
 LDOMAIN=$(cfg Ldomain)
 TMAX=$(cfg tmax)
+DTMAX=$(cfg DTmax)
 BO=$(cfg Bo)
 THETA_INIT=$(cfg thetaInit)
 THETA_E=$(cfg thetaE)
@@ -85,6 +97,16 @@ THETA_RATE=$(cfg thetaRate)
 [ "$MODE" = "fixedBeta" ] || [ "$MODE" = "fixedEc" ] || { echo "MODE must be fixedBeta or fixedEc"; exit 1; }
 if [ "$MODE" = "fixedBeta" ] && [ -z "$BETA" ]; then echo "fixedBeta mode needs beta"; exit 1; fi
 if [ "$MODE" = "fixedEc" ] && [ -z "$EC" ]; then echo "fixedEc mode needs Ec"; exit 1; fi
+[ -n "$DTMAX" ] || DTMAX=1e-5
+
+if [ -n "$OUT_SUBDIR" ]; then
+  case "$OUT_SUBDIR" in
+    /*|*".."*) echo "Invalid --out-subdir: $OUT_SUBDIR"; exit 1 ;;
+  esac
+  OUT_BASE="${REPO_ROOT}/simulationCases/${OUT_SUBDIR}"
+else
+  OUT_BASE="${REPO_ROOT}/simulationCases/dropImpactVE"
+fi
 
 # total case count and validation
 NWE=$(echo $SWEEP_WE | wc -w)
@@ -127,6 +149,7 @@ gen_case() {
 MAXlevel = $MAXLEVEL
 Ldomain = $LDOMAIN
 tmax = $TMAX
+DTmax = $DTMAX
 We = $we
 Ohs = $OHS
 Oha = $oha
@@ -158,6 +181,11 @@ done
 if [ "$DRY_RUN" -eq 1 ]; then
   echo "-----------------------------------------------------------------"
   echo "Dry run: ${#PLAN_NO[@]} case.params would be written under $OUT_BASE/<CaseNo>/"
+  exit 0
+fi
+
+if [ "$GENERATE_ONLY" -eq 1 ]; then
+  echo "Generated ${#PLAN_NO[@]} case.params files under $OUT_BASE"
   exit 0
 fi
 

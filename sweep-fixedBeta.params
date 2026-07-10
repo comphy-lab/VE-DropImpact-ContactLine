@@ -24,6 +24,7 @@ beta = 0.1         # solvent fraction  ->  Oh_total = Ohs/beta = 0.03
 MAXlevel = 10      # paper used ~13 (dz_min ~ 1e-3); 10 is tractable
 Ldomain = 8.0
 tmax = 20.0
+DTmax = 2e-5
 Bo = 1.0
 
 # contact-line switching (paper protocol: ramp 160 -> 60 over t in [8,9])

@@ -21,6 +21,7 @@ Ec = 0.1           # elasto-capillary number (fixed)
 MAXlevel = 10
 Ldomain = 8.0
 tmax = 20.0
+DTmax = 2e-5
 Bo = 1.0
 
 # contact-line switching (paper protocol: ramp 160 -> 60 over t in [8,9])
