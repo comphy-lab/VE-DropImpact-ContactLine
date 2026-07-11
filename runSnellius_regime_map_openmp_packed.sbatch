@@ -17,6 +17,7 @@
 #
 #   sbatch --array=0-2 --export=ALL,SWEEP_CONFIG=sweep-fixedBeta.params,\
 #     OUT_SUBDIR=figure2-full-map-contact-fixed-openmp-20260710/fixedBeta,\
+#     CASE_OFFSET=36,\
 #     BASILISK_SRC_OVERRIDE=/path/to/basilisk/src \
 #     runSnellius_regime_map_openmp_packed.sbatch
 #
@@ -33,6 +34,7 @@ BASILISK_SRC_OVERRIDE="${BASILISK_SRC_OVERRIDE:-}"
 CASES_PER_NODE="${CASES_PER_NODE:-12}"
 OMP_THREADS="${OMP_THREADS:-16}"
 NODE_INDEX="${SLURM_ARRAY_TASK_ID:-0}"
+CASE_OFFSET="${CASE_OFFSET:-0}"
 
 case "$OUT_SUBDIR" in
   /*|*".."*) echo "ERROR: invalid OUT_SUBDIR: $OUT_SUBDIR" >&2; exit 1 ;;
@@ -45,6 +47,9 @@ esac
 [[ "$CASES_PER_NODE" =~ ^[0-9]+$ ]] && [[ "$OMP_THREADS" =~ ^[0-9]+$ ]] || {
   echo "ERROR: CASES_PER_NODE and OMP_THREADS must be positive integers." >&2
   exit 1
+}
+[[ "$CASE_OFFSET" =~ ^[0-9]+$ ]] || {
+  echo "ERROR: CASE_OFFSET must be a non-negative integer." >&2; exit 1
 }
 (( CASES_PER_NODE > 0 && OMP_THREADS > 0 )) || exit 1
 (( CASES_PER_NODE * OMP_THREADS == 192 )) || {
@@ -69,22 +74,24 @@ read -r -a DE_VALUES <<< "$(config_value SWEEP_DE)"
 TOTAL_CASES=$(( ${#WE_VALUES[@]} * ${#DE_VALUES[@]} ))
 (( TOTAL_CASES > 0 )) || { echo "ERROR: empty We-De grid." >&2; exit 1; }
 
-FIRST_CASE=$(( NODE_INDEX * CASES_PER_NODE + 1 ))
-LAST_CASE=$(( FIRST_CASE + CASES_PER_NODE - 1 ))
-if (( FIRST_CASE > TOTAL_CASES )); then
+FIRST_INDEX=$(( NODE_INDEX * CASES_PER_NODE + 1 ))
+LAST_INDEX=$(( FIRST_INDEX + CASES_PER_NODE - 1 ))
+if (( FIRST_INDEX > TOTAL_CASES )); then
   echo "Node index ${NODE_INDEX} has no cases for ${TOTAL_CASES}-case grid."
   exit 0
 fi
-if (( LAST_CASE > TOTAL_CASES )); then
-  LAST_CASE=$TOTAL_CASES
+if (( LAST_INDEX > TOTAL_CASES )); then
+  LAST_INDEX=$TOTAL_CASES
 fi
+FIRST_CASE=$(( CASE_OFFSET + FIRST_INDEX ))
+LAST_CASE=$(( CASE_OFFSET + LAST_INDEX ))
 
 CASE_ROOT="$PROJECT_DIR/simulationCases/$OUT_SUBDIR"
 BUILD_DIR="$PROJECT_DIR/.snellius-build/$OUT_SUBDIR"
 LOG_DIR="$PROJECT_DIR/.snellius-logs"
 
 if [[ "${DRY_RUN:-0}" == "1" ]]; then
-  echo "Dry run: config=${SWEEP_CONFIG}, grid=${TOTAL_CASES}, node=${NODE_INDEX}, cases=${FIRST_CASE}..${LAST_CASE}."
+  echo "Dry run: config=${SWEEP_CONFIG}, grid=${TOTAL_CASES}, node=${NODE_INDEX}, indices=${FIRST_INDEX}..${LAST_INDEX}, cases=${FIRST_CASE}..${LAST_CASE}."
   echo "Dry run: packing=${CASES_PER_NODE}x${OMP_THREADS}=192, output=${OUT_SUBDIR}."
   exit 0
 fi
@@ -111,7 +118,8 @@ echo "Node:           $(hostname)"
 echo "Config:         $SWEEP_CONFIG"
 echo "Output:         $OUT_SUBDIR"
 echo "Grid:           ${#WE_VALUES[@]} We x ${#DE_VALUES[@]} De = $TOTAL_CASES"
-echo "Cases:          $FIRST_CASE..$LAST_CASE"
+echo "Grid indices:   $FIRST_INDEX..$LAST_INDEX"
+echo "Case numbers:   $FIRST_CASE..$LAST_CASE (offset $CASE_OFFSET)"
 echo "Packing:        ${CASES_PER_NODE} cases x ${OMP_THREADS} OpenMP threads = 192 CPUs"
 echo "Basilisk:       $BASILISK"
 echo "============================================="
@@ -121,7 +129,8 @@ echo "============================================="
 exec 9>"$BUILD_DIR/.prepare.lock"
 flock 9
 bash runParameterSweep.sh --config "$SWEEP_CONFIG" --out-subdir "$OUT_SUBDIR" \
-  --start 1 --end "$TOTAL_CASES" --generate-only
+  --start "$FIRST_INDEX" --end "$LAST_INDEX" --case-offset "$CASE_OFFSET" \
+  --generate-only
 
 BINARY="$BUILD_DIR/dropImpactVE_openmp"
 if [[ ! -x "$BINARY" || "$PROJECT_DIR/simulationCases/dropImpactVE.c" -nt "$BINARY" || \

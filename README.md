@@ -128,6 +128,10 @@ bash runParameterSweep.sh --config sweep-fixedEc.params --start 7 --end 12
 
 Each case is written to `simulationCases/dropImpactVE/<CaseNo>/case.params`
 and consumed by the same `case-params.h` parser as a single run.
+Use `--case-offset N` to append a repeat grid without overwriting an existing
+numbered sweep; for example, `--case-offset 36` writes cases `037`--`072`.
+The packed Snellius launcher accepts the matching `CASE_OFFSET` environment
+variable.
 
 ## Parameters
 

@@ -19,13 +19,17 @@ OUT_BASE="${REPO_ROOT}/simulationCases/dropImpactVE"
 usage() {
   cat <<'EOF'
 Usage: runParameterSweep.sh [--config FILE] [--start N] [--end M]
-                            [--out-subdir DIR] [--generate-only] [--dry-run]
+                            [--case-offset N] [--out-subdir DIR]
+                            [--generate-only] [--dry-run]
 
 Options:
   --config FILE  Sweep config (default: sweep-fixedBeta.params).
                  Provided: sweep-fixedBeta.params, sweep-fixedEc.params.
   --start N      First CaseNo to run (default 1).
   --end M        Last CaseNo to run (default = total number of cases).
+  --case-offset N
+                 Add N to every generated case number.  This preserves
+                 existing case directories when appending a repeat sweep.
   --out-subdir DIR
                  Write cases below simulationCases/DIR rather than the
                  legacy simulationCases/dropImpactVE root.
@@ -43,6 +47,7 @@ EOF
 CONFIG="${REPO_ROOT}/sweep-fixedBeta.params"
 CASE_START=1
 CASE_END=""
+CASE_OFFSET=0
 OUT_SUBDIR=""
 GENERATE_ONLY=0
 DRY_RUN=0
@@ -52,6 +57,7 @@ while [ "$#" -gt 0 ]; do
     --config) CONFIG="$2"; shift 2 ;;
     --start)  CASE_START="$2"; shift 2 ;;
     --end)    CASE_END="$2"; shift 2 ;;
+    --case-offset) CASE_OFFSET="$2"; shift 2 ;;
     --out-subdir) OUT_SUBDIR="$2"; shift 2 ;;
     --generate-only) GENERATE_ONLY=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
@@ -98,6 +104,9 @@ THETA_RATE=$(cfg thetaRate)
 if [ "$MODE" = "fixedBeta" ] && [ -z "$BETA" ]; then echo "fixedBeta mode needs beta"; exit 1; fi
 if [ "$MODE" = "fixedEc" ] && [ -z "$EC" ]; then echo "fixedEc mode needs Ec"; exit 1; fi
 [ -n "$DTMAX" ] || DTMAX=1e-5
+[[ "$CASE_OFFSET" =~ ^[0-9]+$ ]] || {
+  echo "Invalid --case-offset: $CASE_OFFSET"; exit 1;
+}
 
 if [ -n "$OUT_SUBDIR" ]; then
   case "$OUT_SUBDIR" in
@@ -118,7 +127,7 @@ if [ "$CASE_START" -lt 1 ] || [ "$CASE_END" -gt "$NTOT" ] || [ "$CASE_START" -gt
 fi
 
 echo "Sweep mode: $MODE   |   We x De = ${NWE} x ${NDE} = ${NTOT} cases"
-echo "Running CaseNo ${CASE_START}..${CASE_END}"
+echo "Running grid indices ${CASE_START}..${CASE_END} (case offset ${CASE_OFFSET})"
 printf '%-7s %-7s %-9s %-9s %-9s %-9s\n' CaseNo We De Ec Oha lambda
 echo "-----------------------------------------------------------------"
 
@@ -172,9 +181,10 @@ for we in $SWEEP_WE; do
     no=$((no + 1))
     [ "$no" -lt "$CASE_START" ] && continue
     [ "$no" -gt "$CASE_END" ] && continue
-    gen_case "$no" "$we" "$de"
-    PLAN_NO+=("$no")
-    PLAN_DIR+=("$(printf '%s/%03d' "$OUT_BASE" "$no")")
+    case_number=$((CASE_OFFSET + no))
+    gen_case "$case_number" "$we" "$de"
+    PLAN_NO+=("$case_number")
+    PLAN_DIR+=("$(printf '%s/%03d' "$OUT_BASE" "$case_number")")
   done
 done
 
