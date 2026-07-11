@@ -44,6 +44,20 @@ python3 postProcess/render_one.py \
   --time 1.6 -o latest.png
 ```
 
+`render_latest_cases.py` renders one latest snapshot per numbered case under a
+regime-map root.  It compiles the extractors once and distributes independent
+cases across workers; this is the monitor entry point for a live sweep.
+
+```bash
+python3 postProcess/render_latest_cases.py \
+  --case-root /path/to/staged/fixedBeta \
+  --output-dir /path/to/latest-images --cpus 4 --ny 320
+```
+
+It writes files named `case-<id>-t<time>.png` and a
+`latest-render-manifest.csv`.  It uses the same signed trace, velocity,
+streamline, and impact-window defaults as `VideoAxi.py`.
+
 Both helper programs restore the full VE/contact-line solver state and write
 their machine-readable output to standard output. A serial helper built against
 the producing Basilisk tree can read the present MPI snapshots for visual
