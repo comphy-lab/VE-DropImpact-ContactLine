@@ -35,3 +35,7 @@ postProcess/getData-elastic-scalar2D
 # Editor / OS
 .DS_Store
 .vscode/
+
+# Python bytecode cache
+__pycache__/
+*.pyc
