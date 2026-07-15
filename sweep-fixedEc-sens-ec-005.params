@@ -1,0 +1,28 @@
+# Sensitivity study: elasto-capillary number Ec = 0.05 (fixedEc mode), MAXlevel=11 baseline.
+#
+# Anchor points only: We=40, De in {0.158 (partial_rebound), 0.326
+# (deposition_beads)}. Ec lowered from the baseline 0.1 to 0.05, all
+# other parameters at baseline.
+
+MODE = fixedEc
+
+# sweep axes (Cartesian product; We is the outer loop) -- anchors only
+SWEEP_WE = 40
+SWEEP_DE = 0.158 0.326
+
+# fixed rheology
+Ohs = 0.003        # solvent (water) Ohnesorge number
+Ec = 0.05          # sensitivity: baseline campaign uses 0.1
+
+# fixed numerics / forcing
+MAXlevel = 11
+Ldomain = 8.0
+tmax = 20.0
+DTmax = 2e-5
+Bo = 1.0
+
+# contact-line switching (paper protocol: ramp 160 -> 60 over t in [8,9])
+thetaInit = 160.0
+thetaE = 60.0
+ttheta = 8.0
+thetaRate = 100.0

@@ -1,0 +1,30 @@
+# Sensitivity study: contact-angle switch DURATION ttheta = 6.0 (fixedBeta
+# reference rheology, beta=0.1, Ohs=0.003), MAXlevel=11 baseline.
+#
+# Anchor points only: We=40, De in {0.158 (partial_rebound), 0.326
+# (deposition_beads)}. ttheta shortened from the baseline 8.0 to 6.0
+# (switch window t in [8,14] instead of [8,16]), all other parameters
+# (including thetaInit, thetaE, thetaRate) at baseline.
+
+MODE = fixedBeta
+
+# sweep axes (Cartesian product; We is the outer loop) -- anchors only
+SWEEP_WE = 40
+SWEEP_DE = 0.158 0.326
+
+# fixed rheology (reference: fixedBeta baseline)
+Ohs = 0.003        # solvent (water) Ohnesorge number
+beta = 0.1         # solvent fraction  ->  Oh_total = Ohs/beta = 0.03
+
+# fixed numerics / forcing
+MAXlevel = 11
+Ldomain = 8.0
+tmax = 20.0
+DTmax = 2e-5
+Bo = 1.0
+
+# contact-line switching (paper protocol: ramp 160 -> 60 over t in [8,9])
+thetaInit = 160.0
+thetaE = 60.0
+ttheta = 6.0       # sensitivity: baseline campaign uses 8.0
+thetaRate = 100.0
