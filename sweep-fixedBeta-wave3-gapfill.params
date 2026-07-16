@@ -1,0 +1,32 @@
+# Parameter sweep (APPEND wave 3): fill the two largest remaining De gaps.
+#
+# Wave 2 (De={0.20,0.25,0.38,0.50}) is still running -- only 2/72 cases
+# completed so far. Vatsal asked for MORE datapoints in the gap regardless.
+# Current De columns (both waves): 0, 0.03, 0.075, 0.158, 0.20, 0.25, 0.326,
+# 0.38, 0.43, 0.50. The two largest remaining gaps are 0.25->0.326 (0.076,
+# right in the partial_rebound/deposition_beads transition zone) and
+# 0.43->0.50 (0.07). This wave adds De=0.29 and De=0.46 to split them.
+#
+#     Ec = Ohs*(1-beta)/(beta*De)   (derived per case; no De=0 here)
+
+MODE = fixedBeta
+
+SWEEP_WE = 15 20 25 30 35 40 45 50 60
+SWEEP_DE = 0.29 0.46
+
+# fixed rheology
+Ohs = 0.003        # solvent (water) Ohnesorge number
+beta = 0.1         # solvent fraction  ->  Oh_total = Ohs/beta = 0.03
+
+# fixed numerics / forcing
+MAXlevel = 11
+Ldomain = 8.0
+tmax = 20.0
+DTmax = 2e-5
+Bo = 1.0
+
+# contact-line switching (paper protocol: ramp 160 -> 60 over t in [8,9])
+thetaInit = 160.0
+thetaE = 60.0
+ttheta = 8.0
+thetaRate = 100.0
