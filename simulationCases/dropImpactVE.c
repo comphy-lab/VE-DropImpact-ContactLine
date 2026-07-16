@@ -33,6 +33,7 @@ Worthington-jet drop-bounce setup.
 #include "navier-stokes/conserving.h"
 #include "tension.h"
 #include "reduced.h"
+#include "tag.h"
 #include "case-params.h"
 
 #define logFile "logAxi-scalar.dat"
@@ -219,6 +220,10 @@ event contactAngle (i++) {
 ## Adaptive mesh refinement
 
 Refine on interface, velocity, curvature, and polymer conformation.
+Sub-grid gas bubbles (wisps) can pinch off near the symmetry axis when a
+thin jet forms -- under-resolved, they destabilize the log-conformation
+solve there. `remove_droplets (f, ..., bubbles = true)` clears any gas
+pocket smaller than 4 cells before it can trigger that blow-up.
 */
 event adapt (i++) {
   scalar KAPPA[], trA[];
@@ -228,6 +233,7 @@ event adapt (i++) {
   adapt_wavelet ((scalar *){f, u.x, u.y, KAPPA, trA},
       (double[]){fErr, VelErr, VelErr, KErr, AErr},
       MAXlevel, 4);
+  remove_droplets (f, 4, 1e-4, true);
   unrefine (x > 0.98*Ldomain); // suppress backflow from the outflow side
 }
 
