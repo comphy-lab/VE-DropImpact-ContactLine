@@ -1,0 +1,48 @@
+# Newtonian De=0 rebound column, WITHOUT the contact-angle switch --
+# BIG-DOMAIN rerun (Vatsal, 2026-07-16).
+#
+# The original rerun (sweep-newtonian-De0-noswitch.params, job 24629689,
+# Ldomain=8/MAXlevel=11) hit the outflow-boundary blow-up (failure mode #1)
+# in 3/6 cases (003 We30, 004 We40, 006 We60): a clean rebounding droplet
+# rides right at z~Ldomain=8 and the solve destabilizes there, even with NO
+# contact-angle switch and NO polymer stress -- a pure BC/geometry artefact,
+# not a physical or rheological one.
+#
+# Rather than engineer a proper absorbing/sponge outflow BC, Vatsal's call:
+# just push the boundary far enough away that we stop relying on it.
+# Ldomain 8->16 (2x) while MAXlevel 11->12 (+1) keeps the finest cell size
+# EXACTLY unchanged (dx = Ldomain/2^MAXlevel = 8/2048 = 16/4096 = 0.0039...),
+# so resolution near the drop/interface is identical to the original
+# campaign -- only the distance to the outflow boundary changes. Since AMR
+# (adapt_wavelet, minlevel 4) only refines near the interface, the extra
+# background domain stays cheap; the main added cost is finer near-interface
+# resolution matching MAXlevel=12 and a smaller CFL-limited dt.
+#
+# De=0 => Ec=0 (Newtonian); fixedBeta and fixedEc are identical here, so this
+# single 6-case set again serves the De=0 column of BOTH grids.
+#
+# Mechanism: the solver computes
+#   theta0 = (t>ttheta) ? max(thetaE, thetaInit - thetaRate*(t-ttheta)) : thetaInit
+# Setting thetaE = thetaInit = 160 makes theta0 == 160 for all t (no switch).
+
+MODE = fixedBeta
+
+SWEEP_WE = 15 20 30 40 50 60
+SWEEP_DE = 0.0
+
+# fixed rheology (Newtonian: Ec derived = 0 at De=0)
+Ohs = 0.003
+beta = 0.1         # Oh_total = Ohs/beta = 0.03
+
+# fixed numerics / forcing -- DOMAIN DOUBLED, MAXlevel +1 to hold dx fixed
+MAXlevel = 12
+Ldomain = 16.0
+tmax = 20.0
+DTmax = 2e-5
+Bo = 1.0
+
+# NO contact-angle switch: constant 160-degree non-wetting angle
+thetaInit = 160.0
+thetaE = 160.0
+ttheta = 8.0
+thetaRate = 100.0
