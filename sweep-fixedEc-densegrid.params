@@ -1,0 +1,36 @@
+# Parameter sweep (APPEND wave 4): dense regular We-De grid, FIXED Ohs, FIXED Ec.
+#
+# Companion to sweep-fixedBeta-densegrid.params -- see that file for the full
+# rationale (Vatsal, 2026-07-17: want enough numerics density to plot the
+# regime map as a filled background-color field, not a scatter). Same
+# rectangular grid: We = 10..60 step 5 (11 values), De = 0.05..0.50 step 0.05
+# (10 values, De=0 excluded -- handled separately by the Newtonian rerun).
+#
+# 110 cases this config x 2 grids (fixedBeta + fixedEc) = 220 new simulations.
+#
+# Non-destructive append onto the existing run root via CASE_OFFSET=126
+# (last case number used by wave 3) -> cases 127-236. Same out-subdir as
+# waves 1-3, so it reuses (and auto-recompiles, picking up the 2026-07-17
+# wisp-removal fix) the existing build cache.
+
+MODE = fixedEc
+
+SWEEP_WE = 10 15 20 25 30 35 40 45 50 55 60
+SWEEP_DE = 0.05 0.10 0.15 0.20 0.25 0.30 0.35 0.40 0.45 0.50
+
+# fixed rheology
+Ohs = 0.003        # solvent (water) Ohnesorge number
+Ec = 0.1           # elasto-capillary number (fixed); beta drifts with De
+
+# fixed numerics / forcing
+MAXlevel = 11
+Ldomain = 8.0
+tmax = 20.0
+DTmax = 2e-5
+Bo = 1.0
+
+# contact-line switching (paper protocol: ramp 160 -> 60 over t in [8,9])
+thetaInit = 160.0
+thetaE = 60.0
+ttheta = 8.0
+thetaRate = 100.0
