@@ -1,0 +1,58 @@
+# Newtonian De=0 rebound column, WITHOUT the contact-angle switch --
+# SECOND, LARGER domain attempt (Vatsal, 2026-07-17: "go for a bigger
+# domain as needed").
+#
+# The first big-domain attempt (Ldomain=16, MAXlevel=12) doubled the
+# original domain and held dx fixed -- it fully resolved We=15 (clean,
+# consistent with the original small-domain result: full detachment,
+# main body falls back and re-touches down by t=19.9) but We=30
+# guard-stopped AGAIN at t=17.6178, same outflow-boundary failure mode
+# as the original small-domain run (t=11.8891), just delayed.
+#
+# The delay was NOT proportional to the domain increase: doubling the
+# domain (8->16) delayed the failure by a factor of ~3x in coast time
+# (assuming ejection starts ~t=9: original coast ~2.9 time units to
+# reach z=8, new coast ~8.6 time units to reach z=16) -- i.e., the
+# ejected mass decelerates over time (gravity/drag), so each further
+# unit of domain buys MORE than proportional extra time. This argues
+# for a larger jump this time, not another cautious doubling.
+#
+# Ldomain 16->32 (4x the ORIGINAL small-domain value), MAXlevel 12->13,
+# holding dx = Ldomain/2^MAXlevel EXACTLY fixed at 0.00390625 (same as
+# all three domain sizes: 8/2^11 = 16/2^12 = 32/2^13) -- so near-interface
+# resolution is unchanged, only the distance to the boundary changes
+# again.
+#
+# Redoing ALL SIX We values (not just the ones that failed at Ldomain=16)
+# for a single internally-consistent rebound-column dataset at one
+# domain/resolution, rather than a patchwork of different domains for
+# different We. De=0 => Ec=0 (Newtonian); fixedBeta and fixedEc are
+# identical here, so this single 6-case set again serves the De=0 column
+# of BOTH grids.
+#
+# Mechanism: the solver computes
+#   theta0 = (t>ttheta) ? max(thetaE, thetaInit - thetaRate*(t-ttheta)) : thetaInit
+# Setting thetaE = thetaInit = 160 makes theta0 == 160 for all t (no switch).
+
+MODE = fixedBeta
+
+SWEEP_WE = 15 20 30 40 50 60
+SWEEP_DE = 0.0
+
+# fixed rheology (Newtonian: Ec derived = 0 at De=0)
+Ohs = 0.003
+beta = 0.1         # Oh_total = Ohs/beta = 0.03
+
+# fixed numerics / forcing -- domain quadrupled vs the original, MAXlevel
+# +2 to hold dx fixed
+MAXlevel = 13
+Ldomain = 32.0
+tmax = 20.0
+DTmax = 2e-5
+Bo = 1.0
+
+# NO contact-angle switch: constant 160-degree non-wetting angle
+thetaInit = 160.0
+thetaE = 160.0
+ttheta = 8.0
+thetaRate = 100.0
