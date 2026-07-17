@@ -1,0 +1,51 @@
+# Parameter sweep: proper re-redo of the wisp-removal fix reruns for
+# fixedEc/080 and fixedEc/116.
+#
+# The first wisp-fix attempt (2026-07-17) submitted these two cases as
+# 1 case x 192 OpenMP threads each -- a bad packing choice (Vatsal,
+# 2026-07-17: "1 case on 192 threads is HORRIBLE, do not do that, redo").
+# Basilisk's adaptive-mesh-refinement tree operations do not scale to that
+# many threads for a case this size; after ~16h wall-clock both reruns had
+# only reached t~1 (vs the normal ~1 day to reach t=19.9), meaning neither
+# would have reached its previous failure point for weeks. The abandoned
+# slow runs were cancelled and their directories archived as
+# `fixedEc/{080,116}-abandoned-1x192-too-slow`.
+#
+# This config uses the SAME 6x32=192 packing already proven in this
+# campaign (the Newtonian De=0 reruns, both small- and big-domain, use
+# exactly this packing successfully). We = {20,25,30} x De = {0.46,0.50}
+# gives exactly 6 cases, hitting both needed points:
+#   (We=20, De=0.50) = the original case080 point
+#   (We=30, De=0.46) = the original case116 point
+# plus two genuinely useful bonus gap-fill points (We=20,De=0.46 and
+# We=25,De=0.46 -- new; We=25/30,De=0.50 duplicate already-classified
+# points, accepted as a small deliberate inefficiency for a clean grid,
+# same convention used elsewhere in this campaign).
+#
+# Non-destructive: fresh CASE_OFFSET=300 (past wave 5's last case 261)
+# -> cases 301-306, brand new directories, does not touch the archived
+# abandoned dirs above. Same build cache/source as the rest of the
+# campaign, so this automatically includes the wisp-removal fix
+# (remove_droplets, commit 5b028b6).
+
+MODE = fixedEc
+
+SWEEP_WE = 20 25 30
+SWEEP_DE = 0.46 0.50
+
+# fixed rheology
+Ohs = 0.003        # solvent (water) Ohnesorge number
+Ec = 0.1           # elasto-capillary number (fixed); beta drifts with De
+
+# fixed numerics / forcing
+MAXlevel = 11
+Ldomain = 8.0
+tmax = 20.0
+DTmax = 2e-5
+Bo = 1.0
+
+# contact-line switching (paper protocol: ramp 160 -> 60 over t in [8,9])
+thetaInit = 160.0
+thetaE = 60.0
+ttheta = 8.0
+thetaRate = 100.0
