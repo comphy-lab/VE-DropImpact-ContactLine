@@ -1,0 +1,42 @@
+# Parameter sweep (APPEND wave 5): local refinement around an isolated
+# "rebound" point surrounded by other regimes.
+#
+# fixedBeta/094 (We=40, De=0.25) classified as a genuine full-body `rebound`
+# -- the first non-zero-De rebound found in the whole campaign -- but its
+# immediate neighbours are `partial_rebound` (We=40,De=0.20) and
+# `deposition_beads` (We=35/45,De=0.25 and We=40,De=0.38). On the filled
+# nearest-neighbour regime map this shows up as a single-point island
+# surrounded on all sides by different regimes (Vatsal, 2026-07-17): "regions
+# where we have only one case and is surrounded by other regimes ... need
+# better resolution." This wave puts a genuinely fine local mesh around that
+# point to determine whether `rebound` is a real (if narrow) pocket or an
+# artifact/outlier that a denser sampling will show is actually continuous
+# with its `partial_rebound` or `deposition_beads` neighbours.
+#
+# We = {35, 37.5, 40, 42.5, 45} x De = {0.20, 0.225, 0.25, 0.275, 0.30}
+# = 25 cases, centred exactly on the anomalous point.
+#
+# Non-destructive append at CASE_OFFSET=236 (last case used by wave 4)
+# -> cases 237-261.
+
+MODE = fixedBeta
+
+SWEEP_WE = 35 37.5 40 42.5 45
+SWEEP_DE = 0.20 0.225 0.25 0.275 0.30
+
+# fixed rheology
+Ohs = 0.003        # solvent (water) Ohnesorge number
+beta = 0.1         # solvent fraction  ->  Oh_total = Ohs/beta = 0.03
+
+# fixed numerics / forcing
+MAXlevel = 11
+Ldomain = 8.0
+tmax = 20.0
+DTmax = 2e-5
+Bo = 1.0
+
+# contact-line switching (paper protocol: ramp 160 -> 60 over t in [8,9])
+thetaInit = 160.0
+thetaE = 60.0
+ttheta = 8.0
+thetaRate = 100.0

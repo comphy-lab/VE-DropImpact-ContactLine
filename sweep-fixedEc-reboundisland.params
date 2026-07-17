@@ -1,0 +1,37 @@
+# Parameter sweep (APPEND wave 5): local refinement around the SAME (We,De)
+# point where fixedBeta shows an isolated "rebound" island (see
+# sweep-fixedBeta-reboundisland.params for the full rationale).
+#
+# fixedEc at the identical point (We=40, De=0.25) classified `deposition_beads`,
+# not `rebound` -- a real fixedBeta-vs-fixedEc physics divergence (they have
+# different Ec at the same De). Running the same fine local mesh on this grid
+# too, both to double-check fixedEc genuinely doesn't show any rebound
+# tendency nearby, and to pin down the divergence itself more precisely.
+#
+# We = {35, 37.5, 40, 42.5, 45} x De = {0.20, 0.225, 0.25, 0.275, 0.30}
+# = 25 cases.
+#
+# Non-destructive append at CASE_OFFSET=236 (last case used by wave 4)
+# -> cases 237-261.
+
+MODE = fixedEc
+
+SWEEP_WE = 35 37.5 40 42.5 45
+SWEEP_DE = 0.20 0.225 0.25 0.275 0.30
+
+# fixed rheology
+Ohs = 0.003        # solvent (water) Ohnesorge number
+Ec = 0.1           # elasto-capillary number (fixed); beta drifts with De
+
+# fixed numerics / forcing
+MAXlevel = 11
+Ldomain = 8.0
+tmax = 20.0
+DTmax = 2e-5
+Bo = 1.0
+
+# contact-line switching (paper protocol: ramp 160 -> 60 over t in [8,9])
+thetaInit = 160.0
+thetaE = 60.0
+ttheta = 8.0
+thetaRate = 100.0
