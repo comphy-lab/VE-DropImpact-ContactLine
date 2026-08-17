@@ -1,0 +1,41 @@
+# Newtonian De=0 rebound column, WITHOUT the contact-angle switch --
+# extends the definitive G10 big-domain baseline
+# (sweep-newtonian-De0-noswitch-bigdomain2.params: Ldomain=32, MAXlevel=13,
+# constant theta=160, cases 1-6 at We={15,20,30,40,50,60}) to the round-5
+# We values that only exist in the fixedBeta/fixedEc grids' wave-4 densegrid
+# (We=10,25,35,45,55), so the De=0 column is complete across the full
+# round We axis Vatsal asked to bias/fill (2026-08-17).
+#
+# De=0 => Ec=0 (Newtonian): fixedBeta and fixedEc are identical here, so
+# this single 5-case set again serves the De=0 column of BOTH grids --
+# not doubled.
+#
+# Same recipe as G10 exactly (dx = Ldomain/2^MAXlevel = 32/2^13 =
+# 0.00390625, identical to every other resolution tier in this campaign):
+#   theta0 = (t>ttheta) ? max(thetaE, thetaInit - thetaRate*(t-ttheta)) : thetaInit
+# thetaE = thetaInit = 160 makes theta0 == 160 for all t (no switch).
+#
+# Non-destructive append into the SAME OUT_SUBDIR (newtonianDe0-bigdomain2)
+# via CASE_OFFSET=6 (G10's own 6 cases already occupy 1-6) -> cases 7-11.
+
+MODE = fixedBeta
+
+SWEEP_WE = 10 25 35 45 55
+SWEEP_DE = 0.0
+
+# fixed rheology (Newtonian: Ec derived = 0 at De=0)
+Ohs = 0.003
+beta = 0.1         # Oh_total = Ohs/beta = 0.03
+
+# fixed numerics / forcing -- identical to G10
+MAXlevel = 13
+Ldomain = 32.0
+tmax = 20.0
+DTmax = 2e-5
+Bo = 1.0
+
+# NO contact-angle switch: constant 160-degree non-wetting angle
+thetaInit = 160.0
+thetaE = 160.0
+ttheta = 8.0
+thetaRate = 100.0

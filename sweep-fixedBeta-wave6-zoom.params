@@ -1,0 +1,41 @@
+# Parameter sweep (APPEND wave 6a): finish the 0.225/0.275 local-zoom
+# columns across the full round We axis.
+#
+# Wave 5 (reboundisland) put a fine 0.025-step De zoom (0.20, 0.225, 0.25,
+# 0.275, 0.30) around the isolated fixedBeta/094 rebound point, but only at
+# We = {35, 37.5, 40, 42.5, 45}. Vatsal (2026-08-17) asked to bias new
+# datapoints into 0.1<De<0.4 and close real remaining holes in that band.
+# The two half-columns 0.225 and 0.275 are the clearest hole: they exist
+# only for that 5-point We neighbourhood, not for the rest of the round
+# We axis. This wave extends them to the remaining round We values
+# (10, 15, 20, 25, 30, 50, 55, 60 -- deliberately excluding 35/40/45,
+# which already have 0.225/0.275 from wave 5, to avoid recomputing
+# already-terminal cases).
+#
+# 16 cases this config x 2 grids (fixedBeta + fixedEc) = 32 new simulations.
+#
+# Non-destructive append onto the existing run root via CASE_OFFSET=306
+# (last case number used anywhere in the campaign, fixedEc/wispfix-redo
+# cases 301-306) -> cases 307-322.
+
+MODE = fixedBeta
+
+SWEEP_WE = 10 15 20 25 30 50 55 60
+SWEEP_DE = 0.225 0.275
+
+# fixed rheology
+Ohs = 0.003        # solvent (water) Ohnesorge number
+beta = 0.1         # solvent fraction  ->  Oh_total = Ohs/beta = 0.03
+
+# fixed numerics / forcing
+MAXlevel = 11
+Ldomain = 8.0
+tmax = 20.0
+DTmax = 2e-5
+Bo = 1.0
+
+# contact-line switching (paper protocol: ramp 160 -> 60 over t in [8,9])
+thetaInit = 160.0
+thetaE = 60.0
+ttheta = 8.0
+thetaRate = 100.0

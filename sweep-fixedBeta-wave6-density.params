@@ -1,0 +1,32 @@
+# Parameter sweep (APPEND wave 6b): new De=0.125/0.175 columns across the
+# full round We axis -- densifies the sparsest remaining interval in the
+# bias band (the existing round grid jumps 0.10 -> 0.15 -> 0.158 -> 0.20;
+# these two columns roughly halve that spacing). Vatsal (2026-08-17): bias
+# new datapoints into 0.1<De<0.4.
+#
+# 22 cases this config x 2 grids (fixedBeta + fixedEc) = 44 new simulations.
+#
+# Non-destructive append via CASE_OFFSET=306, following directly after
+# wave 6a (cases 307-322) -> cases 323-344.
+
+MODE = fixedBeta
+
+SWEEP_WE = 10 15 20 25 30 35 40 45 50 55 60
+SWEEP_DE = 0.125 0.175
+
+# fixed rheology
+Ohs = 0.003        # solvent (water) Ohnesorge number
+beta = 0.1         # solvent fraction  ->  Oh_total = Ohs/beta = 0.03
+
+# fixed numerics / forcing
+MAXlevel = 11
+Ldomain = 8.0
+tmax = 20.0
+DTmax = 2e-5
+Bo = 1.0
+
+# contact-line switching (paper protocol: ramp 160 -> 60 over t in [8,9])
+thetaInit = 160.0
+thetaE = 60.0
+ttheta = 8.0
+thetaRate = 100.0

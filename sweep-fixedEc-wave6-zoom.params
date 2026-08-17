@@ -1,0 +1,31 @@
+# Parameter sweep (APPEND wave 6a): finish the 0.225/0.275 local-zoom
+# columns across the full round We axis. fixedEc counterpart of
+# sweep-fixedBeta-wave6-zoom.params -- same We/De grid, Ec fixed instead
+# of beta fixed. See that file for full rationale.
+#
+# 16 cases this config x 2 grids (fixedBeta + fixedEc) = 32 new simulations.
+#
+# Non-destructive append via CASE_OFFSET=306 -> cases 307-322 (same case
+# numbers as the fixedBeta counterpart, campaign convention).
+
+MODE = fixedEc
+
+SWEEP_WE = 10 15 20 25 30 50 55 60
+SWEEP_DE = 0.225 0.275
+
+# fixed rheology
+Ohs = 0.003        # solvent (water) Ohnesorge number
+Ec = 0.1           # fixed elasto-capillary number
+
+# fixed numerics / forcing
+MAXlevel = 11
+Ldomain = 8.0
+tmax = 20.0
+DTmax = 2e-5
+Bo = 1.0
+
+# contact-line switching (paper protocol: ramp 160 -> 60 over t in [8,9])
+thetaInit = 160.0
+thetaE = 60.0
+ttheta = 8.0
+thetaRate = 100.0
