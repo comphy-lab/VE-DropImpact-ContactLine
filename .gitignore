@@ -10,6 +10,7 @@ basilisk/
 
 # Local agent pointer
 CLAUDE.md
+.cowork-project.yaml
 
 # Simulation output
 intermediate/
@@ -21,6 +22,12 @@ logAxi-scalar.dat
 simulationCases/dropImpactVE/
 simulationCases/figure2-De025/
 simulationCases/*/intermediate/
+simulationCases/*/case.params
+simulationCases/*/dropImpactVE
+simulationCases/*/dropImpactVE.c
+simulationCases/*/run.err
+simulationCases/*/run.out
+simulationCases/*/simulation.status
 **/Video/
 **/render-one*.png
 
