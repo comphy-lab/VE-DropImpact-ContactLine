@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import math
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -31,7 +32,8 @@ def parse_args() -> argparse.Namespace:
                         help="Render the available snapshot nearest this time.")
     parser.add_argument("-o", "--output", type=Path)
     parser.add_argument("--ny", type=int, default=400)
-    parser.add_argument("--left-field", choices=("D2", "trA"), default="trA")
+    parser.add_argument("--left-field", choices=("D2", "trA", "sigma_p_zz"),
+                        default="trA")
     parser.add_argument("--zmin", type=float, default=0.)
     parser.add_argument("--zmax", type=float, default=4.)
     parser.add_argument("--rmax", type=float, default=4.)
@@ -43,6 +45,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--vel-vmax", type=float)
     parser.add_argument("--left-vmin", type=float)
     parser.add_argument("--left-vmax", type=float)
+    parser.add_argument("--stress-we", type=float,
+                        help="Run Weber number for capillary-scaled polymer stress.")
     parser.add_argument("--impact-speed", type=float, default=1.)
     parser.add_argument("--no-streamlines", dest="streamlines", action="store_false",
                         default=True)
@@ -67,6 +71,10 @@ def main() -> int:
     args = parse_args()
     if args.ny <= 2 or args.rmax <= 0 or args.zmax <= args.zmin:
         raise SystemExit("Invalid --ny, --rmax, or z bounds")
+    if args.left_field == "sigma_p_zz" and not (
+            args.stress_we is not None and math.isfinite(args.stress_we)
+            and args.stress_we > 0.):
+        raise SystemExit("--stress-we must be positive for sigma_p_zz")
     video = load_video()
     case_dir = args.case_dir.resolve()
     snapshot = choose_snapshot(video, case_dir, args)
@@ -81,7 +89,7 @@ def main() -> int:
         )
         _, _, fields = video.get_field_grid(
             snapshot, data_bin, case_dir, xmin, 0., xmax,
-            max(abs(ymin), abs(ymax)), args.ny
+            max(abs(ymin), abs(ymax)), args.ny, args.stress_we or 1.
         )
         left_limits = video.default_left_limits(args.left_field, fields[args.left_field])
         output = args.output or case_dir / f"render-one-t{video.snapshot_time(snapshot):.4f}.png"

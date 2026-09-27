@@ -24,11 +24,13 @@ np: Any = None
 plt: Any = None
 LineCollection: Any = None
 
-FIELD_INDEX = {"D2": 2, "vel": 3, "trA": 4, "ux": 5, "uy": 6, "f": 7}
+FIELD_INDEX = {"D2": 2, "vel": 3, "trA": 4, "ux": 5, "uy": 6, "f": 7,
+               "sigma_p_zz": 8}
 FIELD_LABEL = {
     "D2": r"$\log_{10}\!\left(\|\mathcal{D}\|^2\right)$",
     "vel": r"$|\mathbf{u}|$",
     "trA": r"$\log_{10}\!\left(\mathrm{tr}(\mathbf{A})/3\right)$",
+    "sigma_p_zz": r"$\log_{10}|\tilde{\sigma}_{\mathrm{p},zz}|$",
 }
 
 
@@ -55,7 +57,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--end-time", type=float)
     parser.add_argument("--no-clean-frames", dest="clean_frames",
                         action="store_false", default=True)
-    parser.add_argument("--left-field", choices=("D2", "trA"), default="trA")
+    parser.add_argument("--left-field", choices=("D2", "trA", "sigma_p_zz"),
+                        default="trA")
     parser.add_argument("--zmin", type=float, default=0.,
                         help="Default axial lower bound (default: 0).")
     parser.add_argument("--zmax", type=float, default=4.,
@@ -76,6 +79,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--vel-vmax", type=float)
     parser.add_argument("--left-vmin", type=float)
     parser.add_argument("--left-vmax", type=float)
+    parser.add_argument("--stress-we", type=float,
+                        help="Run Weber number for capillary-scaled polymer stress.")
     parser.add_argument("--no-streamlines", dest="streamlines", action="store_false",
                         default=True, help="Do not overlay liquid-phase streamlines.")
     parser.add_argument("--streamline-density", type=float, default=1.15,
@@ -194,19 +199,21 @@ def get_facets(snapshot: Path, facet_bin: Path, case_dir: Path) -> Any:
 
 
 def get_field_grid(snapshot: Path, data_bin: Path, case_dir: Path, xmin: float,
-                   ymin: float, xmax: float, ymax: float, ny: int) -> tuple[Any, Any, dict[str, Any]]:
+                   ymin: float, xmax: float, ymax: float, ny: int,
+                   stress_we: float = 1.) -> tuple[Any, Any, dict[str, Any]]:
     ensure_plotting()
     raw = run_capture([
         str(data_bin), snapshot_argument(snapshot, case_dir), f"{xmin:.16g}",
         f"{ymin:.16g}", f"{xmax:.16g}", f"{ymax:.16g}", str(ny),
+        f"{stress_we:.16g}",
     ], case_dir)
     rows: list[list[float]] = []
     for line in raw.splitlines():
         values = line.split()
-        if len(values) < 8:
+        if len(values) < 9:
             continue
         try:
-            rows.append([float(value) for value in values[:8]])
+            rows.append([float(value) for value in values[:9]])
         except ValueError:
             continue
     if not rows:
@@ -270,6 +277,8 @@ def default_left_limits(field_name: str, field: Any) -> tuple[float | None, floa
         return -3., 1.
     if field_name == "trA":
         return -1., 1.
+    if field_name == "sigma_p_zz":
+        return -2., 0.
     return finite_limits(field)
 
 
@@ -293,18 +302,19 @@ def extent(centres: Any) -> tuple[float, float]:
 
 def render_frame(output: Path, snapshot: Path, facet_bin: Path, data_bin: Path,
                  case_dir: Path, args: Any, limits: tuple[Any, Any, Any, Any]) -> Path:
-    """Render a mirrored D2/trA and velocity diagnostic for one snapshot."""
+    """Render a mirrored scalar and velocity diagnostic for one snapshot."""
     ensure_plotting()
     facets = get_facets(snapshot, facet_bin, case_dir)
     physical_ymin, physical_ymax = 0., max(abs(args.ymin), abs(args.ymax))
     xs, ys, fields = get_field_grid(snapshot, data_bin, case_dir, args.xmin,
-                                    physical_ymin, args.xmax, physical_ymax, args.ny)
+                                    physical_ymin, args.xmax, physical_ymax, args.ny,
+                                    getattr(args, "stress_we", None) or 1.)
     radii, velocity = mirrored(fields["vel"], ys)
     _, left = mirrored(fields[args.left_field], ys)
     _, liquid = mirrored(fields["f"], ys)
     left = np.ma.masked_where((radii[None, :] > 0.) | (liquid < .5), left)
-    if args.left_field == "trA":
-        # A non-positive trace is outside log10's domain; equilibrium is zero.
+    if args.left_field in ("trA", "sigma_p_zz"):
+        # The extractor uses -10 for invalid trace or near-zero stress.
         left = np.ma.masked_where(left <= -9.99, left)
     _, axial_velocity, radial_velocity = mirrored_velocity(fields["ux"], fields["uy"], ys)
     x_extent, r_extent = extent(xs), extent(radii)
@@ -389,6 +399,11 @@ def main() -> int:
             or args.zmax <= args.zmin):
         print("Invalid --cpus, --ny, --duration, --rmax, or z bounds.", file=sys.stderr)
         return 1
+    if args.left_field == "sigma_p_zz" and not (
+            args.stress_we is not None and math.isfinite(args.stress_we)
+            and args.stress_we > 0.):
+        print("--stress-we must be positive for sigma_p_zz.", file=sys.stderr)
+        return 1
     case_dir = args.case_dir.resolve() if args.case_dir else auto_detect_case_dir(
         Path.cwd().resolve(), args.snap_glob)
     snapshots = list_snapshots(case_dir, args.snap_glob)
@@ -424,7 +439,8 @@ def main() -> int:
                     get_facets(snapshots[0], facet_bin, case_dir), *requested)
                 _, _, fields = get_field_grid(
                     snapshots[0], data_bin, case_dir, args.xmin, 0., args.xmax,
-                    max(abs(args.ymin), abs(args.ymax)), args.ny
+                    max(abs(args.ymin), abs(args.ymax)), args.ny,
+                    args.stress_we or 1.
                 )
                 vel_limits = (0., args.impact_speed)
                 left_limits = default_left_limits(args.left_field, fields[args.left_field])

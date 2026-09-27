@@ -2,11 +2,12 @@
 # Scalar diagnostics for VE drop-impact snapshots
 
 Restore the complete solver state and sample `D2`, velocity, normalised
-conformation trace, and liquid-fraction diagnostics on a uniform physical
-half-plane grid.
+conformation trace, axial polymer stress, and liquid-fraction diagnostics
+on a uniform physical half-plane grid. The optional final argument converts
+stress from impact-pressure to capillary-pressure units.
 
 ```bash
-getData-elastic-scalar2D snapshot xmin ymin xmax ymax ny > fields.dat
+getData-elastic-scalar2D snapshot xmin ymin xmax ymax ny [We] > fields.dat
 ```
 */
 
@@ -24,14 +25,15 @@ getData-elastic-scalar2D snapshot xmin ymin xmax ymax ny > fields.dat
 
 int nx, ny, len;
 double xmin, ymin, xmax, ymax, Deltax, Deltay;
-scalar D2c[], vel[], trA[], ux[], uy[];
+double stress_we;
+scalar D2c[], vel[], trA[], ux[], uy[], sigma_p_zz[];
 scalar * list = NULL;
 
 int main (int argc, char * argv[])
 {
-  if (argc != 7) {
+  if (argc != 7 && argc != 8) {
     fprintf (stderr,
-             "Usage: %s <snapshot> <xmin> <ymin> <xmax> <ymax> <ny>\n",
+             "Usage: %s <snapshot> <xmin> <ymin> <xmax> <ymax> <ny> [We]\n",
              argv[0]);
     return 1;
   }
@@ -41,7 +43,9 @@ int main (int argc, char * argv[])
   xmax = atof (argv[4]);
   ymax = atof (argv[5]);
   ny = atoi (argv[6]);
-  if (ny < 1 || xmax <= xmin || ymax <= ymin) {
+  stress_we = argc == 8 ? atof (argv[7]) : 1.;
+  if (ny < 1 || xmax <= xmin || ymax <= ymin ||
+      !isfinite(stress_we) || stress_we <= 0.) {
     fprintf (stderr, "Invalid sampling bounds or resolution.\n");
     return 1;
   }
@@ -56,6 +60,7 @@ int main (int argc, char * argv[])
   list = list_add (list, ux);
   list = list_add (list, uy);
   list = list_add (list, f);
+  list = list_add (list, sigma_p_zz);
 
   foreach() {
     double D11 = (u.y[0,1] - u.y[0,-1])/(2.*Delta);
@@ -74,6 +79,11 @@ int main (int argc, char * argv[])
     // extension. Keep a sentinel only for the invalid log domain.
     trA[] = A11[] + A22[] + AThTh[];
     trA[] = trA[] > 1e-12 ? log10(trA[]/3.) : -10.;
+    // The axial coordinate is x in axi.h; the solver stores
+    // T11 = (Ec/We)*(A11 - 1) in impact-pressure units. Multiplying by
+    // We yields Ec*(A11 - 1), the manuscript's capillary-pressure units.
+    double stress = fabs(stress_we*T11[]);
+    sigma_p_zz[] = stress > 1e-10 ? log10(stress) : -10.;
   }
 
   Deltay = (ymax - ymin)/ny;
