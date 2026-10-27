@@ -44,6 +44,14 @@ python3 postProcess/render_one.py \
   --time 1.6 -o latest.png
 ```
 
+Use `--left-field sigma_p_zz --stress-we <We>` with either renderer to show
+`log10(|We T11|)`, the axial polymer stress magnitude in capillary-pressure
+units (`gamma/R0`). Supply the radius-based Weber number of the case. The
+default range is `[-2, 0]`; zero and near-zero liquid stress use the lowest
+stress colour, while gas is masked. The extractor interpolates the linear
+stress magnitude before taking its logarithm. Its optional final `[We]`
+argument defaults to 1 for callers using impact-pressure units.
+
 Both helper programs restore the full VE/contact-line solver state and write
 their machine-readable output to standard output. A serial helper built against
 the producing Basilisk tree can read the present MPI snapshots for visual

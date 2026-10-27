@@ -77,8 +77,11 @@ vector h[];
 ## Boundary conditions
 
 Left = solid substrate: no-slip plus the (time-dependent) contact angle.
-Right and top are outflow. Bottom is the axis of symmetry (handled by
-`axi.h`). Note that `f` is **not** pinned at the wall: the drop wets it.
+Right and top use zero pressure and zero normal velocity gradients without
+an outlet coarsening strip. Tangential velocity and axial scalar conditions
+are stated explicitly, including their zero-gradient defaults. Bottom is
+the axis of symmetry (handled by `axi.h`). Note that `f` is **not** pinned
+at the wall: the drop wets it.
 */
 double theta0; // live contact angle (degrees), updated each step
 
@@ -86,9 +89,16 @@ u.t[left] = dirichlet(0.0);
 h.t[left] = contact_angle(theta0*pi/180.);
 
 u.n[right] = neumann(0.);
+u.t[right] = neumann(0.);
 p[right]   = dirichlet(0.0);
+pf[right]  = dirichlet(0.0);
+f[right]   = neumann(0.);
+AThTh[right] = neumann(0.);
+T_ThTh[right] = neumann(0.);
 u.n[top]   = neumann(0.);
+u.t[top]   = neumann(0.);
 p[top]     = dirichlet(0.0);
+pf[top]    = dirichlet(0.0);
 
 /**
 ## Dimensionless groups
@@ -228,7 +238,6 @@ event adapt (i++) {
   adapt_wavelet ((scalar *){f, u.x, u.y, KAPPA, trA},
       (double[]){fErr, VelErr, VelErr, KErr, AErr},
       MAXlevel, 4);
-  unrefine (x > 0.98*Ldomain); // suppress backflow from the outflow side
 }
 
 /**
